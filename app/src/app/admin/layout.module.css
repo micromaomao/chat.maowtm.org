@@ -1,0 +1,21 @@
+.container {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "nav main";
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.nav {
+  grid-area: nav;
+  background-color: var(--colorNeutralBackground3);
+}
+
+.main {
+  grid-area: main;
+  box-shadow: -2px 0 4px var(--colorNeutralShadowKey);
+  padding: 16px;
+  overflow: auto;
+}

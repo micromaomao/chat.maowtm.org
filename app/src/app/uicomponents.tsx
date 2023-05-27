@@ -6,8 +6,9 @@
  */
 
 export * from '@fluentui/react-components'
-import { FluentProvider, webLightTheme, BrandVariants, createDarkTheme, createLightTheme, Theme } from '@fluentui/react-components'
+import { FluentProvider, BrandVariants, createDarkTheme, createLightTheme, Theme } from '@fluentui/react-components'
 export { Alert } from '@fluentui/react-components/unstable'
+export * from "@fluentui/react-icons"
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const maochat: BrandVariants = {
@@ -40,8 +41,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   darkTheme.colorBrandForeground1 = maochat[110];
   darkTheme.colorBrandForeground2 = maochat[120];
+
+  let doc = undefined;
+  if (typeof window !== 'undefined') {
+    doc = window.document;
+  }
+
   return (
-    <FluentProvider theme={lightTheme}>
+    <FluentProvider theme={lightTheme} targetDocument={doc}>
       {children}
     </FluentProvider>
   )

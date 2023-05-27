@@ -1,6 +1,6 @@
 import './globals.css'
 
-import { ThemeProvider } from './uicomponent'
+import { ThemeProvider } from './uicomponents'
 
 export const metadata = {
   title: 'MaoChat'

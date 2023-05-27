@@ -1,7 +1,7 @@
 import Link from "next/link"
 import styles from "./page.module.css"
 
-import { Button, Alert, Title1 } from '@/app/uicomponent'
+import { Button, Alert, Title1 } from '@/app/uicomponents'
 
 export default function Home() {
   return (
