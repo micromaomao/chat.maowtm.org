@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
         return makeUnauthenticatedResponse(request);
       }
       return NextResponse.redirect(new URL("/admin/login", request.url), {
-        headers: { "Cache-Control": "no-store, must-revalidate" }
+        headers: { "Cache-Control": "no-store" }
       });
     }
   }

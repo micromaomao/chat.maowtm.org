@@ -3,6 +3,7 @@ import styles from "./layout.module.css"
 import Nav from "./nav"
 import AdminSkeleton from "./skeleton"
 import { SharedStateProvider } from "@/app/utils/sharedstate"
+import { cookies } from "next/headers"
 
 export const metadata = {
   title: {
@@ -15,6 +16,7 @@ export default function Layout({
 }: {
   children: React.ReactNode
 }) {
+  cookies();
   return (
     <div className={styles.container}>
       <SharedStateProvider sessionStorageId="admin-ui-state">

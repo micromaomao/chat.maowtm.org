@@ -1,7 +1,6 @@
 "use client"
 
 import { Button, Title1 } from "@/app/uicomponents";
-import { revalidatePath } from "next/cache";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -10,8 +9,8 @@ export default function LoginPage() {
     await fetch("/api/admin/login", {
       method: "POST",
     })
-    revalidatePath("/admin")
     router.replace("/admin")
+    router.refresh()
   }
 
   return (
