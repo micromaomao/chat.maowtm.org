@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { OpenAIError, getEmbedding, getSimilarity } from "@/lib/chat/ai"
-import { checkAdminAuthentication, makeUnauthenticatedResponse } from "@/lib/auth";
+import { OpenAIError, getEmbedding } from "@/lib/chat/ai"
 import { dot, norm } from "@/lib/vectools";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  if (!checkAdminAuthentication(request)) {
-    return makeUnauthenticatedResponse(request);
-  }
   let model = request.nextUrl.searchParams.get("model");
   let inputs = request.nextUrl.searchParams.getAll("input");
   if (typeof inputs === "string") {
@@ -18,7 +14,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!model || inputs.length == 0 || !inputs.every(x => x)) {
     return new NextResponse("Invalid request", { status: 400, headers: { "Content-Type": "text/plain" } });
   }
-  if (inputs.length > 10 || inputs.some(x => x.length > 10000)) {
+  if (inputs.length > 30 || inputs.some(x => x.length > 10000)) {
     return new NextResponse("Too many inputs or input too long", { status: 400, headers: { "Content-Type": "text/plain" } });
   }
   let total_tokens = 0;
@@ -40,7 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch (e) {
     abortController.abort();
     if (e instanceof OpenAIError) {
-      return new NextResponse(e.toString(), { status: 500, headers: { "Content-Type": "text/plain" }});
+      return new NextResponse(e.toString(), { status: 500, headers: { "Content-Type": "text/plain" } });
     } else {
       throw e;
     }

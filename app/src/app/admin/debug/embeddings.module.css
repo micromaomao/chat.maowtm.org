@@ -6,6 +6,7 @@
 
 .inputField {
   grid-area: inputField;
+  padding: 2px 4px;
 }
 
 .inputRowNoRemove {
@@ -46,4 +47,8 @@
 .similarityRow {
   display: block;
   width: 100%;
+}
+
+.bestMatch {
+  background-color: var(--colorPaletteYellowBackground2);
 }

@@ -1,12 +1,14 @@
 "use client"
 
-import { Alert, Button, Combobox, Field, Option, Skeleton, SkeletonItem, Textarea, Body2, ProgressBar } from "@/app/uicomponents"
+import { Alert, Button, Combobox, Field, Option, Skeleton, SkeletonItem, Textarea, Body2, ProgressBar, DeleteRegular, AddCircleRegular } from "@/app/uicomponents"
 import { useSharedState } from "@/app/utils/sharedstate"
 import { Link } from "@/app/uicomponents";
-import { PureComponent, RefObject, createRef, useState } from "react";
+import { PureComponent, RefObject, createContext, createRef, useContext, useEffect, useState } from "react";
 import useSWRImmutable from "swr/immutable"
 
 import styles from "./embeddings.module.css"
+
+const setBestMatchHighlightContext = createContext<any>(null);
 
 export default function EmbeddingsTest({ available_models }: { available_models: string[] }) {
   const [inputs, setInputs] = useSharedState<string[]>("admin.debug.embeddings.inputs", [""]);
@@ -14,13 +16,19 @@ export default function EmbeddingsTest({ available_models }: { available_models:
   const handleSelectModel = (_: any, { optionText }: any) => {
     if (optionText) {
       setModel(optionText);
+      setBestMatchHighlight(null);
     }
+  }
+  const handleInputModel = (evt: any) => {
+    setModel((evt.target as HTMLInputElement).value);
+    setBestMatchHighlight(null);
   }
   const [showValidation, setShowValidation] = useState<boolean>(false);
   const inputsValid = inputs.map(ipt => ipt.length > 0);
   const modelValid = model.length > 0;
   const formValid = inputsValid.every(x => x) && inputs.length > 0 && modelValid;
   const [currentResultInput, setCurrentResultInput] = useState<any>(null);
+  const [bestMatchHighlight, setBestMatchHighlight] = useState<number | null>(null);
   const handleSubmit = () => {
     setShowValidation(true);
     if (!formValid) {
@@ -32,22 +40,44 @@ export default function EmbeddingsTest({ available_models }: { available_models:
     let newInputs = [...inputs];
     newInputs[idx] = value;
     setInputs(newInputs);
+    setBestMatchHighlight(null);
+  }
+  const addInput = () => {
+    setInputs([...inputs, ""]);
+    setShowValidation(false);
+    setBestMatchHighlight(null);
+  }
+  const removeInput = (idx: number) => {
+    setInputs(inputs.filter((_, i) => i !== idx));
+    setBestMatchHighlight(null);
   }
   return (
     <>
       {inputs.map((input, idx) => (
-        <Field className={styles.inputField} label={`Input ${idx + 1}`} required={true}
-          validationMessage={(showValidation && !inputsValid[idx]) ? `Input ${idx + 1} must not be empty` : undefined}>
+        <Field key={idx}
+          className={styles.inputField + (idx === bestMatchHighlight ? (" " + styles.bestMatch) : "")}
+          label={`Input ${idx + 1}`}
+          required={true}
+          validationMessage={(showValidation && !inputsValid[idx]) ? `Input ${idx + 1} must not be empty` : undefined}
+        >
           <div className={styles.inputRow + (idx === 0 ? (" " + styles.inputRowNoRemove) : "")} key={idx}>
-            <Textarea resize="vertical" defaultValue={input} onChange={(_, data) => updateInput(idx, data.value)} />
+            <Textarea
+              resize="vertical"
+              defaultValue={input}
+              onChange={(_, data) => updateInput(idx, data.value)}
+              appearance={idx === bestMatchHighlight ? "filled-lighter" : undefined}
+            />
             {idx > 0 ? (
-              <Button className={styles.removeInputBtn} appearance="subtle" onClick={() => setInputs(inputs.filter((_, i) => i !== idx))}>Remove</Button>
+              <Button className={styles.removeInputBtn} appearance="transparent" onClick={() => removeInput(idx)} icon={<DeleteRegular />} />
             ) : null}
           </div>
         </Field>
       ))}
       <div style={{ height: "8px" }} />
-      {inputs.length < 10 ? (<Button appearance="secondary" onClick={() => { setInputs([...inputs, ""]); setShowValidation(false); }}>Add input</Button>) : null}
+      {inputs.length < 30 ? (
+        <Button appearance="secondary" onClick={addInput} icon={<AddCircleRegular />}>
+          Add input
+        </Button>) : null}
       <div style={{ height: "16px" }} />
       <Field label="Model" required={true}
         validationMessage={(showValidation && !modelValid ? "Select or input a model" : undefined)}>
@@ -56,7 +86,7 @@ export default function EmbeddingsTest({ available_models }: { available_models:
           defaultSelectedOptions={[model]}
           defaultValue={model}
           onOptionSelect={handleSelectModel}
-          onInput={evt => setModel((evt.target as HTMLInputElement).value)}>
+          onInput={handleInputModel}>
           {available_models.map(model => (
             <Option value={model} key={model}>
               {model}
@@ -69,7 +99,9 @@ export default function EmbeddingsTest({ available_models }: { available_models:
       {currentResultInput ? (
         <>
           <div style={{ height: "16px" }}></div>
-          <EmbeddingsResult {...currentResultInput} />
+          <setBestMatchHighlightContext.Provider value={setBestMatchHighlight}>
+            <EmbeddingsResult {...currentResultInput} />
+          </setBestMatchHighlightContext.Provider>
         </>
       ) : null}
     </>
@@ -85,7 +117,7 @@ class ResponseError extends Error {
   }
 }
 
-const fetcher = (key: string) => fetch(key).then(async res => {
+const fetcher = (key: string) => fetch(key, { headers: { "Accept": "application/json" } }).then(async res => {
   if (!res.ok) {
     if (res.headers.get("content-type")?.startsWith("text/plain")) {
       let text = await res.text();
@@ -128,23 +160,41 @@ function EmbeddingsResult({ inputs, model }: {
         </Alert>
       ) : null}
       {data ? (
-        <>
-          <div className={styles.embeddingsMapContainer}>
-            {data.embeddings.map((embedding: number[], idx: number) => (
-              <div key={idx}>
-                <Body2 block={true}>Input {idx + 1}:</Body2>
-                <EmbeddingsBar embeddings={embedding} />
-                {idx > 0 ? (
-                  <Field validationMessage={`Cosine similarity with input 1: ${data.similarities[idx]}`} validationState="none" className={styles.similarityRow}>
-                    <ProgressBar as="div" value={data.similarities[idx] + 1} max={2} shape="rounded" thickness="large" />
-                  </Field>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </>
+        <EmbeddingsResultMaps data={data} />
       ) : null}
     </>
+  )
+}
+
+function EmbeddingsResultMaps({ data }: { data: any }) {
+  let bestMatchI: number | null = null;
+  let bestMatchScore = 0;
+  for (let i = 1; i < data.similarities.length; i++) {
+    if (bestMatchI === null || data.similarities[i] > bestMatchScore) {
+      bestMatchI = i;
+      bestMatchScore = data.similarities[i];
+    }
+  }
+  let setBestMatchHighlight = useContext(setBestMatchHighlightContext);
+  useEffect(() => {
+    if (setBestMatchHighlight) {
+      setBestMatchHighlight(bestMatchI);
+    }
+  }, [data])
+  return (
+    <div className={styles.embeddingsMapContainer}>
+      {data.embeddings.map((embedding: number[], idx: number) => (
+        <div key={idx} className={bestMatchI === idx ? styles.bestMatch : ""}>
+          <Body2 block={true}>Input {idx + 1}:</Body2>
+          <EmbeddingsBar embeddings={embedding} />
+          {idx > 0 ? (
+            <Field validationMessage={`Cosine similarity with input 1: ${data.similarities[idx]}`} validationState="none" className={styles.similarityRow}>
+              <ProgressBar as="div" value={Math.max(0, data.similarities[idx])} max={1} shape="rounded" thickness="large" />
+            </Field>
+          ) : null}
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -203,11 +253,12 @@ class EmbeddingsBar extends PureComponent<EmbeddingsBarProps> {
     canvas.style.height = `${nbRows * blockCssSize}px`;
 
     let ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < embeddings.length; i += 1) {
       let row = Math.floor(i / blocksPerRow);
       let col = i % blocksPerRow;
       let p = embeddings[i];
-      let POW_FACTOR = 0.4;
+      let POW_FACTOR = 0.3;
       p = Math.sign(p) * Math.pow(Math.abs(p), POW_FACTOR);
       let color;
       if (p < 0) {

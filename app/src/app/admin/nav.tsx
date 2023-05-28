@@ -46,7 +46,7 @@ export default function Nav() {
   }, [isOnLoginPage])
 
   return (
-    <TabList size="large" selectedValue={currentValue} vertical={true} onTabSelect={onTabSelect}>
+    <TabList size="large" selectedValue={currentValue} vertical={true} onTabSelect={onTabSelect} appearance="transparent">
       <Tab value="back" icon={<ArrowHookDownLeftRegular />}>Back to chat</Tab>
       {isOnLoginPage ? (
         <Tab value="login" icon={<LockClosedFilled />}>Login</Tab>

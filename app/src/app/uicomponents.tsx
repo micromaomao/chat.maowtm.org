@@ -11,7 +11,7 @@ export { Field } from '@fluentui/react-field'
 export { Textarea } from '@fluentui/react-textarea'
 export { Link } from '@fluentui/react-link'
 export { ProgressBar } from '@fluentui/react-progress'
-export { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, LockClosedFilled } from "@fluentui/react-icons"
+export { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, LockClosedFilled, DeleteRegular, AddCircleRegular } from "@fluentui/react-icons"
 
 import { FluentProvider, BrandVariants, createDarkTheme, createLightTheme, Theme } from '@fluentui/react-components'
 
