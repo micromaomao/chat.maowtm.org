@@ -1,0 +1,49 @@
+.inputRow {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  grid-template-areas: "inputField removeInputBtn";
+}
+
+.inputField {
+  grid-area: inputField;
+}
+
+.inputRowNoRemove {
+  grid-template-areas: "inputField inputField";
+}
+
+.removeInputBtn {
+  grid-area: removeInputBtn;
+}
+
+.embeddingsBar {
+  display: block;
+}
+
+.embeddingsMapContainer {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: auto;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.embeddingsMapContainer > div {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding-left: 4px;
+  padding-right: 4px;
+  display: grid;
+  grid-template-columns: min-content;
+  grid-template-rows: max-content max-content max-content;
+}
+
+.embeddingsMapContainer > div canvas {
+  margin: 10px;
+}
+
+.similarityRow {
+  display: block;
+  width: 100%;
+}

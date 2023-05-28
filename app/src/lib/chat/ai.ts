@@ -83,23 +83,24 @@ interface ResponseWithTokenCount<T> {
   token_count: number;
 }
 
-export async function getEmbedding(params: EmbeddingParams, input: string): Promise<ResponseWithTokenCount<Float32Array>> {
+export async function getEmbedding(params: EmbeddingParams, input: string, abortSignal: AbortSignal | undefined = undefined): Promise<ResponseWithTokenCount<number[]>> {
   console.log(`OpenAI GET embeddings { model: ${params.model}, input: ${input2log(input)} }`)
   let res = await parseResponse(await fetch(API_BASE + "embeddings", {
     body: JSON.stringify({
       model: params.model,
       input,
     }),
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": "Bearer " + API_KEY,
       "Accept": "application/json",
     },
+    signal: abortSignal,
   }));
   let embeddings = res.data[0].embedding;
-  let arr = new Float32Array(embeddings);
   return {
-    result: arr,
+    result: embeddings,
     token_count: res.usage.total_tokens,
   }
 }

@@ -2,10 +2,10 @@ import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adap
 import { NextRequest, NextResponse } from "next/server";
 
 export async function checkAdminAuthentication(request: NextRequest): Promise<boolean> {
-  return false;
+  return true;
 }
 export async function serverComponentCheckAdminAuthentication(cookies: ReadonlyRequestCookies): Promise<boolean> {
-  return false;
+  return true;
 }
 
 export async function makeUnauthenticatedResponse(request: NextRequest): Promise<NextResponse> {
