@@ -45,9 +45,12 @@ export function useSharedState<T = any>(id: string | symbol, initialValue: T): [
   } else {
     retState = state[id] as T;
   }
+  let debugVal = "...";
   if (process.env.NODE_ENV === "development") {
-    useDebugValue(`useSharedState(${String(id)}) = ${JSON.stringify(retState)}`);
+    debugVal = JSON.stringify(retState);
   }
+  // Can't call hooks conditionally
+  useDebugValue(`useSharedState(${String(id)}) = ${debugVal}`);
   return [retState, (newState: T) => {
     setState((state: any) => {
       if (state[id] === newState) {

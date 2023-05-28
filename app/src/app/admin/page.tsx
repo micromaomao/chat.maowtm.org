@@ -4,10 +4,10 @@ export const metadata = {
   title: 'MaoChat Management'
 }
 
-export default function AdminHome() {
+export default async function AdminHome() {
   return (
-    <main>
+    <div>
       <Title2 as="h2">Admin interface</Title2>
-    </main>
+    </div>
   )
 }

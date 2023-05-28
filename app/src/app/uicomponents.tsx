@@ -1,14 +1,17 @@
 'use client'
 
-/**
- * This file is needed to mark all fluentui components as needed to be bundled
- * to the client.
- */
-
-export * from '@fluentui/react-components'
-import { FluentProvider, BrandVariants, createDarkTheme, createLightTheme, Theme } from '@fluentui/react-components'
+export { Tab, TabList, type SelectTabEventHandler } from '@fluentui/react-tabs'
+export { Combobox, Option } from '@fluentui/react-combobox'
+export { Text, Title1, Title2 } from '@fluentui/react-text'
+export { Button } from "@fluentui/react-button"
+export { Skeleton, SkeletonItem } from "@fluentui/react-skeleton"
+export { Accordion, AccordionHeader, AccordionItem, AccordionPanel } from "@fluentui/react-accordion"
 export { Alert } from '@fluentui/react-components/unstable'
-export * from "@fluentui/react-icons"
+export { Field } from '@fluentui/react-field'
+export { Textarea } from '@fluentui/react-textarea'
+export { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, LockClosedFilled } from "@fluentui/react-icons"
+
+import { FluentProvider, BrandVariants, createDarkTheme, createLightTheme, Theme } from '@fluentui/react-components'
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const maochat: BrandVariants = {
