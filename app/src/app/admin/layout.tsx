@@ -1,3 +1,5 @@
+"use client"
+
 import { Suspense } from "react"
 import styles from "./layout.module.css"
 import Nav from "./nav"
