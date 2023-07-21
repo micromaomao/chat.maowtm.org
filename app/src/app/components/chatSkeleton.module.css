@@ -1,0 +1,23 @@
+.content {
+  display: grid;
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  grid-template-rows: repeat(5, 1fr);
+  grid-column-gap: 20px;
+  grid-row-gap: 20px;
+}
+
+.botMsg, .userMsg {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.botMsg {
+  align-items: flex-start;
+}
+
+.userMsg {
+  align-items: flex-end;
+}

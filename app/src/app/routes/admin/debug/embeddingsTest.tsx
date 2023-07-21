@@ -1,12 +1,13 @@
-"use client"
-
-import { Alert, Button, Combobox, Field, Option, Skeleton, SkeletonItem, Textarea, Body2, ProgressBar, DeleteRegular, AddCircleRegular } from "@/app/uicomponents"
-import { useSharedState } from "@/app/utils/sharedstate"
-import { Link } from "@/app/uicomponents";
+import React from "react";
+import { Link, Button, Combobox, Field, Option, Skeleton, SkeletonItem, Textarea, Body2, ProgressBar } from "@fluentui/react-components";
+import { Alert } from "@fluentui/react-components/unstable";
+import { DeleteRegular, AddCircleRegular } from "@fluentui/react-icons";
+import { useSharedState } from "app/utils/sharedstate";
 import { PureComponent, RefObject, createContext, createRef, useContext, useEffect, useState } from "react";
-import useSWRImmutable from "swr/immutable"
+import useSWRImmutable from "swr/immutable";
 
-import styles from "./embeddings.module.css"
+import styles from "./embeddings.module.css";
+import { API_BASE } from "app/consts";
 
 const setBestMatchHighlightContext = createContext<any>(null);
 
@@ -18,11 +19,11 @@ export default function EmbeddingsTest({ available_models }: { available_models:
       setModel(optionText);
       setBestMatchHighlight(null);
     }
-  }
+  };
   const handleInputModel = (evt: any) => {
     setModel((evt.target as HTMLInputElement).value);
     setBestMatchHighlight(null);
-  }
+  };
   const [showValidation, setShowValidation] = useState<boolean>(false);
   const inputsValid = inputs.map(ipt => ipt.length > 0);
   const modelValid = model.length > 0;
@@ -34,23 +35,23 @@ export default function EmbeddingsTest({ available_models }: { available_models:
     if (!formValid) {
       return;
     }
-    setCurrentResultInput({ inputs, model })
-  }
+    setCurrentResultInput({ inputs, model });
+  };
   const updateInput = (idx: number, value: string) => {
-    let newInputs = [...inputs];
+    const newInputs = [...inputs];
     newInputs[idx] = value;
     setInputs(newInputs);
     setBestMatchHighlight(null);
-  }
+  };
   const addInput = () => {
     setInputs([...inputs, ""]);
     setShowValidation(false);
     setBestMatchHighlight(null);
-  }
+  };
   const removeInput = (idx: number) => {
     setInputs(inputs.filter((_, i) => i !== idx));
     setBestMatchHighlight(null);
-  }
+  };
   return (
     <>
       {inputs.map((input, idx) => (
@@ -105,7 +106,7 @@ export default function EmbeddingsTest({ available_models }: { available_models:
         </>
       ) : null}
     </>
-  )
+  );
 }
 
 class ResponseError extends Error {
@@ -113,28 +114,28 @@ class ResponseError extends Error {
     super(message);
   }
   override toString(): string {
-    return this.message
+    return this.message;
   }
 }
 
 const fetcher = (key: string) => fetch(key, { headers: { "Accept": "application/json" } }).then(async res => {
   if (!res.ok) {
     if (res.headers.get("content-type")?.startsWith("text/plain")) {
-      let text = await res.text();
+      const text = await res.text();
       throw new ResponseError(text);
     } else {
       throw new ResponseError(`${res.status} ${res.statusText}`);
     }
   }
-  return await res.json()
-})
+  return await res.json();
+});
 
 function EmbeddingsResult({ inputs, model }: {
   inputs: string[],
   model: string
 }) {
-  let key = `/admin/debug/embedding/get?model=${encodeURIComponent(model)}`;
-  for (let input of inputs) {
+  let key = `${API_BASE}/debug-embeddings?model=${encodeURIComponent(model)}`;
+  for (const input of inputs) {
     key += `&input=${encodeURIComponent(input)}`;
   }
   let { data, error, isLoading, mutate } = useSWRImmutable(key, fetcher, { shouldRetryOnError: false, keepPreviousData: true });
@@ -145,9 +146,8 @@ function EmbeddingsResult({ inputs, model }: {
     return (
       <Skeleton appearance="opaque">
         <SkeletonItem />
-        <SkeletonItem />
       </Skeleton>
-    )
+    );
   }
   return (
     <>
@@ -163,7 +163,7 @@ function EmbeddingsResult({ inputs, model }: {
         <EmbeddingsResultMaps data={data} />
       ) : null}
     </>
-  )
+  );
 }
 
 function EmbeddingsResultMaps({ data }: { data: any }) {
@@ -175,12 +175,12 @@ function EmbeddingsResultMaps({ data }: { data: any }) {
       bestMatchScore = data.similarities[i];
     }
   }
-  let setBestMatchHighlight = useContext(setBestMatchHighlightContext);
+  const setBestMatchHighlight = useContext(setBestMatchHighlightContext);
   useEffect(() => {
     if (setBestMatchHighlight) {
       setBestMatchHighlight(bestMatchI);
     }
-  }, [data])
+  }, [data]);
   return (
     <div className={styles.embeddingsMapContainer}>
       {data.embeddings.map((embedding: number[], idx: number) => (
@@ -195,7 +195,7 @@ function EmbeddingsResultMaps({ data }: { data: any }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 interface EmbeddingsBarProps {
@@ -227,7 +227,7 @@ class EmbeddingsBar extends PureComponent<EmbeddingsBarProps> {
   }
 
   render() {
-    return (<canvas ref={this.canvasRef} className={styles.embeddingsBar} />)
+    return (<canvas ref={this.canvasRef} className={styles.embeddingsBar} />);
   }
 
   redraw() {
@@ -235,37 +235,37 @@ class EmbeddingsBar extends PureComponent<EmbeddingsBarProps> {
       return;
     }
 
-    let { embeddings } = this.props;
-    let canvas = this.canvasRef.current as HTMLCanvasElement;
-    let dpr = window.devicePixelRatio;
+    const { embeddings } = this.props;
+    const canvas = this.canvasRef.current as HTMLCanvasElement;
+    const dpr = window.devicePixelRatio;
 
     let blockCssSize = 6;
     if (embeddings.length >= 4000) {
       blockCssSize = 2;
     }
-    let blockPixelSize = Math.round(blockCssSize * dpr);
-    let nbBlocks = this.props.embeddings.length;
-    let blocksPerRow = Math.floor(Math.sqrt(nbBlocks));
+    const blockPixelSize = Math.round(blockCssSize * dpr);
+    const nbBlocks = this.props.embeddings.length;
+    const blocksPerRow = Math.floor(Math.sqrt(nbBlocks));
     canvas.width = blocksPerRow * blockPixelSize;
     canvas.style.width = `${blocksPerRow * blockCssSize}px`;
-    let nbRows = Math.ceil(nbBlocks / blocksPerRow);
+    const nbRows = Math.ceil(nbBlocks / blocksPerRow);
     canvas.height = nbRows * blockPixelSize;
     canvas.style.height = `${nbRows * blockCssSize}px`;
 
-    let ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < embeddings.length; i += 1) {
-      let row = Math.floor(i / blocksPerRow);
-      let col = i % blocksPerRow;
+      const row = Math.floor(i / blocksPerRow);
+      const col = i % blocksPerRow;
       let p = embeddings[i];
-      let POW_FACTOR = 0.3;
+      const POW_FACTOR = 0.3;
       p = Math.sign(p) * Math.pow(Math.abs(p), POW_FACTOR);
       let color;
       if (p < 0) {
         p = -p;
-        color = `rgb(255, ${(1 - p) * 255}, ${(1 - p) * 255})`
+        color = `rgb(255, ${(1 - p) * 255}, ${(1 - p) * 255})`;
       } else {
-        color = `rgb(${(1 - p) * 255}, 255, ${(1 - p) * 255})`
+        color = `rgb(${(1 - p) * 255}, 255, ${(1 - p) * 255})`;
       }
       ctx.fillStyle = color;
       ctx.strokeStyle = 'none';

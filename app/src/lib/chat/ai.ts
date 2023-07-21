@@ -8,7 +8,7 @@ export interface EmbeddingParams {
 export const KnownEmbeddingModels = [
   "text-embedding-ada-002",
   "text-similarity-davinci-001",
-]
+];
 
 export class OpenAIError extends Error {
   fetch_err: Error | null = null;
@@ -18,11 +18,11 @@ export class OpenAIError extends Error {
   error_message: string | null = null;
 
   constructor() {
-    super()
+    super();
   }
 
   static fromFetchError(err: Error): OpenAIError {
-    let e = new OpenAIError();
+    const e = new OpenAIError();
     e.fetch_err = err;
     return e;
   }
@@ -40,12 +40,12 @@ export class OpenAIError extends Error {
     if (this.message) {
       return `OpenAI API Error: ${this.message}`;
     }
-    return "Unknown OpenAI API Error"
+    return "Unknown OpenAI API Error";
   }
 }
 
 async function parseResponse(res: Response): Promise<any> {
-  let err = new OpenAIError();
+  const err = new OpenAIError();
   let has_error = false;
   let res_body = null;
   if (!res.ok) {
@@ -84,8 +84,8 @@ interface ResponseWithTokenCount<T> {
 }
 
 export async function getEmbedding(params: EmbeddingParams, input: string, abortSignal: AbortSignal | undefined = undefined): Promise<ResponseWithTokenCount<number[]>> {
-  console.log(`OpenAI GET embeddings { model: ${params.model}, input: ${input2log(input)} }`)
-  let res = await parseResponse(await fetch(API_BASE + "embeddings", {
+  console.log(`OpenAI GET embeddings { model: ${params.model}, input: ${input2log(input)} }`);
+  const res = await parseResponse(await fetch(API_BASE + "embeddings", {
     body: JSON.stringify({
       model: params.model,
       input,
@@ -98,9 +98,9 @@ export async function getEmbedding(params: EmbeddingParams, input: string, abort
     },
     signal: abortSignal,
   }));
-  let embeddings = res.data[0].embedding;
+  const embeddings = res.data[0].embedding;
   return {
     result: embeddings,
     token_count: res.usage.total_tokens,
-  }
+  };
 }

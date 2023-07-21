@@ -1,7 +1,6 @@
-"use client"
-
+import React from "react";
 import { useSharedState } from "./sharedstate";
-import { Accordion as FluentAccordion } from "@/app/uicomponents"
+import { Accordion as FluentAccordion } from "@fluentui/react-components";
 
 export default function Accordion({ children, stateId, defaultOpenItems, ...props }: {
   children: React.ReactNode,
@@ -16,10 +15,10 @@ export default function Accordion({ children, stateId, defaultOpenItems, ...prop
     } else {
       setOpenItems([...openItems, item]);
     }
-  }
+  };
   return (
     <FluentAccordion {...props} openItems={openItems} onToggle={handleToggle}>
       {children}
     </FluentAccordion>
-  )
+  );
 }

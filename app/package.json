@@ -2,24 +2,41 @@
   "name": "chat.maowtm.org",
   "version": "0.1.0",
   "private": true,
+  "browserslist": "> 0.5%, last 2 versions, not dead",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext .ts,.tsx",
+    "build": "export `cat .env.build`; parcel build src/index.html --public-url /",
+    "parcel": "export `cat .env.local`; parcel src/index.html --public-url / --port 8000",
+    "server": "export `cat .env.local`; nodemon --watch src -e js,ts --exec 'ts-node src/server.ts'"
+  },
+  "alias": {
+    "app": "./src/app",
+    "lib": "./src/lib"
   },
   "dependencies": {
+    "express": "^4.18.2",
+    "express-openapi-validator": "^5.0.4",
+    "pg": "^8.11.1",
+    "ulid": "^2.3.0"
+  },
+  "devDependencies": {
     "@fluentui/react-components": "^9.20.4",
     "@fluentui/react-icons": "^2.0.202",
     "@types/node": "20.2.4",
     "@types/react": "18.2.7",
     "@types/react-dom": "18.2.4",
+    "@typescript-eslint/eslint-plugin": "^6.1.0",
+    "@typescript-eslint/parser": "^6.1.0",
     "eslint": "8.41.0",
-    "eslint-config-next": "13.4.4",
-    "next": "13.4.4",
+    "eslint-plugin-react": "^7.33.0",
+    "nodemon": "^3.0.1",
+    "parcel": "^2.9.3",
+    "process": "^0.11.10",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-router-dom": "^6.14.2",
     "swr": "^2.1.5",
-    "typescript": "5.0.4"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
   }
 }

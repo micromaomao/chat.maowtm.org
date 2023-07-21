@@ -1,5 +1,4 @@
-"use client"
-
+import React from "react";
 import { createContext, useContext, useDebugValue, useState } from "react";
 
 const ctx = createContext<{ state: any, setState: any } | null>(null);
@@ -31,7 +30,7 @@ export function SharedStateProvider({ children, sessionStorageId }: {
     <ctx.Provider value={{ state, setState: newSetState }}>
       {children}
     </ctx.Provider>
-  )
+  );
 }
 
 export function useSharedState<T = any>(id: string | symbol, initialValue: T): [T, (newState: T) => void] {
