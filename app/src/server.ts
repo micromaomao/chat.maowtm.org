@@ -1,16 +1,20 @@
 import express from "express";
-
 import api from "./api";
+import * as db from "./db";
 
-const app = express();
+(async () => {
+  await db.init();
 
-app.use(express.text({ type: "text/plain" }));
-app.use(express.json({ type: "application/json" }));
+  const app = express();
 
-app.use("/api/v1", api);
+  app.use(express.text({ type: "text/plain" }));
+  app.use(express.json({ type: "application/json" }));
 
-app.use(express.static("./dist"));
+  app.use("/api", api);
 
-app.listen(3000, () => {
-  console.log("Server is running at http://localhost:3000");
-});
+  app.use(express.static("./dist"));
+
+  app.listen(3000, () => {
+    console.log("Server is running at http://localhost:3000");
+  });
+})();

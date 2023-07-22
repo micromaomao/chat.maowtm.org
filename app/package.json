@@ -7,7 +7,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "build": "export `cat .env.build`; parcel build src/index.html --public-url /",
     "parcel": "export `cat .env.local`; parcel src/index.html --public-url / --port 8000",
-    "server": "export `cat .env.local`; nodemon --watch src -e js,ts --exec 'ts-node src/server.ts'"
+    "server:dev": "export `cat .env.local`; nodemon --watch src -e js,ts --exec 'node -r ts-node/register --inspect src/server.ts'",
+    "server:production": "export `cat .env.production`; node -r ts-node/register src/server.ts"
   },
   "alias": {
     "app": "./src/app",

@@ -29,7 +29,7 @@ function ErrorBoundary() {
     <div>
       <Alert
         intent="error"
-        action={<Button onClick={evt => window.location.reload()}>Refresh</Button>}
+        action={<Button onClick={() => window.location.reload()}>Refresh</Button>}
       >
         Something went wrong&hellip;
       </Alert>

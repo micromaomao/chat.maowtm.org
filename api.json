@@ -287,7 +287,7 @@
           }
         },
         "responses": {
-          "200": {
+          "204": {
             "description": "Success"
           },
           "401": {
@@ -441,6 +441,72 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "No admin auth"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      }
+    },
+    "/global-config": {
+      "get": {
+        "summary": "Get global configuration",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "description": "Configuration object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Set global configuration",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "description": "Configuration object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Success"
           },
           "401": {
             "description": "No admin auth"
