@@ -1,0 +1,750 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MaoChat API",
+    "description": "This is a sample description about this spec.",
+    "termsOfService": "",
+    "contact": {
+      "email": "m@maowtm.org"
+    },
+    "license": {
+      "name": "MIT",
+      "url": ""
+    },
+    "version": "v1"
+  },
+  "externalDocs": {
+    "description": "",
+    "url": ""
+  },
+  "servers": [
+    {
+      "url": "https://chat.maowtm.org/api/v1",
+      "description": ""
+    }
+  ],
+  "tags": [
+    {
+      "name": "admin",
+      "description": "Requires admin authentication",
+      "externalDocs": {
+        "description": "",
+        "url": ""
+      }
+    }
+  ],
+  "paths": {
+    "/chat-session": {
+      "post": {
+        "summary": "Start a new chat session",
+        "description": "Optional authentication with adminToken",
+        "operationId": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_tag": {
+                    "$ref": "#/components/schemas/IdempotentTag"
+                  }
+                },
+                "required": [
+                  "client_tag"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewChatSessionResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "503": {
+            "description": "Server is not accepting new chat sessions",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Chat disabled",
+                  "description": "Short explanation"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "parameters": []
+    },
+    "/chat-session/{session_id}": {
+      "get": {
+        "summary": "Fetch messages in a chat session.",
+        "description": "If there are more messages than `limit`, the latest `limit` messages are returned.",
+        "operationId": "",
+        "tags": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "Only return this many messages.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1000
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "description": "If provided, only messages older than this is returned.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSession"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "404": {
+            "description": "Invalid chat ID or token"
+          }
+        },
+        "security": [
+          {
+            "chatToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "session_id",
+          "description": "",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ]
+    },
+    "/chat-session/{session_id}/stream": {
+      "get": {
+        "summary": "Stream new updates from a chat session using server-sent events",
+        "description": "Push any future update to the messages in a chat session via server-sent events.\n\nTo authenticate, provide either `chatToken` or `adminToken`.",
+        "operationId": "",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "headers": {},
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSessionEventStream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid chat ID or token"
+          }
+        },
+        "security": [
+          {
+            "chatToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "session_id",
+          "description": "",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ]
+    },
+    "/chat-session/{session_id}/send_chat": {
+      "post": {
+        "summary": "Send a chat message as user",
+        "description": "Authenticated with `chatToken` only to prevent admins from sending chat messages to chats which they don't own.",
+        "operationId": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "Content of the chat message to send",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "client_tag": {
+                    "$ref": "#/components/schemas/IdempotentTag"
+                  }
+                },
+                "required": [
+                  "message",
+                  "client_tag"
+                ]
+              }
+            }
+          },
+          "description": ""
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text": {
+                "schema": {
+                  "type": "string",
+                  "description": "ID of the newly created message.",
+                  "example": "01H5FX429ZT99TA8Z5F5E0WW9Z"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid chat ID or token"
+          },
+          "503": {
+            "description": "Server is not accepting new chats"
+          }
+        },
+        "security": [
+          {
+            "chatToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "session_id",
+          "description": "",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ]
+    },
+    "/messages/{msg_id}/edit-bot": {
+      "put": {
+        "summary": "Alter or create dialogue items related to a chat response",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "Invalid admin token"
+          },
+          "404": {
+            "description": "Invalid message ID"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "msg_id",
+          "description": "Message ID, or blank to not associate this edit with a chat message.",
+          "schema": {
+            "type": "string"
+          },
+          "required": false
+        }
+      ]
+    },
+    "/list-chat-sessions": {
+      "get": {
+        "summary": "List all stored chat sessions",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "",
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "default": 1000
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListChatSessionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth token"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      }
+    },
+    "/debug-embeddings": {
+      "get": {
+        "summary": "An endpoint to support inspecting embeddings",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "input",
+            "description": "Input(s)",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "minItems": 1,
+              "maxItems": 30
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "description": "Which embedding model to use",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "embeddings": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 1
+                      },
+                      "minItems": 1
+                    },
+                    "similarities": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 0
+                    },
+                    "total_tokens": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "embeddings",
+                    "similarities",
+                    "total_tokens"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "NewChatSessionResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "chat ID",
+            "example": "01H5FMG00F2N8EM9365KSSMYG9"
+          },
+          "chat_token": {
+            "type": "string",
+            "description": "Token for authentication",
+            "example": "efd0etaewtyv0ry+lmcpperfyfzoxgzz"
+          }
+        },
+        "description": "Information about a newly created chat session",
+        "required": [
+          "session_id",
+          "chat_token"
+        ]
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Message ID",
+            "example": "01H5FNEQ6TSSP9ZJ8T2RKAGGGD"
+          },
+          "session": {
+            "type": "string",
+            "description": "ID of the chat session which this message belongs to. Property may exist if this is implied (such as as part of a event stream response for a chat)",
+            "example": "01H5FMG00F2N8EM9365KSSMYG9"
+          },
+          "msg_type": {
+            "$ref": "#/components/schemas/MessageType"
+          },
+          "content": {
+            "type": "string",
+            "description": "Content of the message",
+            "example": "Hello!",
+            "minLength": 1
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MessageMetadata"
+          },
+          "client_tag": {
+            "type": "string",
+            "description": "The idempotent tag provided by the client in send_chat request. Not available if too long since message creation.",
+            "maxLength": 32,
+            "example": "01H5FXMB77KNQX0CZSM86W1824"
+          }
+        },
+        "description": "Create or update a message.",
+        "required": [
+          "id",
+          "msg_type",
+          "content"
+        ]
+      },
+      "MessageMetadata": {
+        "type": "object",
+        "properties": {
+          "best_match": {
+            "$ref": "#/components/schemas/MetadataDialoguePath"
+          },
+          "updated_before": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Message metadata for chat editing. Only visible if admin authentication present. Only available on bot messages.",
+        "required": [
+          "updated_before"
+        ]
+      },
+      "MetadataDialoguePath": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "dialog_id": {
+              "type": "string",
+              "example": "01H5FQ2CCMX9P8ZT6XA80RR9MQ"
+            },
+            "canonical_phrasing_text": {
+              "type": "string",
+              "example": "What is your favourite programming language?",
+              "minLength": 1
+            }
+          },
+          "description": "Dialogue path items in parent-child order",
+          "required": [
+            "dialog_id",
+            "canonical_phrasing_text"
+          ]
+        },
+        "description": "Dialogue path with the best match (if there is a sufficiently confident dialogue item match). If an earlier update is made, this will be the path which the update was made.",
+        "minItems": 1
+      },
+      "ChatSessionEventStream": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "deleteMessage": {
+            "type": "string",
+            "description": "Signal that a message should be hidden. Value is the message ID.",
+            "example": "01H5FNEQ6TSSP9ZJ8T2RKAGGGD"
+          },
+          "suggestions": {
+            "$ref": "#/components/schemas/ChatSuggestions"
+          }
+        },
+        "description": "A sequence of server-sent events, can be any of the following event type:",
+        "required": [
+          "message",
+          "deleteMessage",
+          "suggestions"
+        ]
+      },
+      "ChatSuggestions": {
+        "type": "object",
+        "properties": {
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Suggested text",
+              "example": "Why do you like Rust?"
+            },
+            "description": "Suggested follow-up replies for a chat",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "example": [
+              "Why do you like Rust?",
+              "How much Rust have you written?"
+            ]
+          },
+          "reply_msg": {
+            "type": "string",
+            "description": "ID of the bot message for which this set of suggestions is attached to",
+            "example": "01H5FNEQ6TSSP9ZJ8T2RKAGGGD"
+          }
+        },
+        "description": "Suggested follow-up replies for a chat",
+        "required": [
+          "suggestions",
+          "reply_msg"
+        ]
+      },
+      "MessageType": {
+        "type": "string",
+        "description": "Type of a chat message",
+        "enum": [
+          "bot",
+          "user"
+        ],
+        "example": "bot"
+      },
+      "IdempotentTag": {
+        "type": "string",
+        "description": "An arbitrary, max-48-chars tag provided by the client. For a limited period onwards, follow-on requests with the same tag are ignored (and returns the previously returned response). This tag is also returned in other useful context.",
+        "example": "01H5FYF29S0Y5E8FKZJGB5P329",
+        "minLength": 1,
+        "maxLength": 48,
+        "pattern": ""
+      },
+      "ChatSession": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "A list of messages requested"
+          },
+          "last_suggestions": {
+            "$ref": "#/components/schemas/ChatSuggestions"
+          }
+        },
+        "description": "Details of a chat session. How many messages are returned depends on the request parameter. `last_suggestions` may not be present if there are no suggestions, or if the last message is from the user.",
+        "required": [
+          "messages"
+        ]
+      },
+      "EditChatRequest": {
+        "type": "object",
+        "properties": {
+          "dialogue_id": {
+            "type": "string",
+            "example": "01H5FZF1Y1B718D069CMYDEQJR",
+            "description": "The ID of the dialogue, if updating an existing one. If this is not provided, `parent_id` must be provided instead."
+          },
+          "parent_id": {
+            "type": "string",
+            "example": "01H5FZF1Y1B718D069CMYDEQJR",
+            "description": "If creating a new child, the ID of the dialogue under which the new dialogue item will be created. If creating a new root dialogue, this must be the json value `null`."
+          },
+          "phrasings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "description": "List of phrasings. First element will be the canonical one used for representing this dialogue item, and further elements are considered alternatives.",
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "reply": {
+            "type": "string",
+            "description": "What the expected reply for this dialogue is.",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "client_tag": {
+            "$ref": "#/components/schemas/IdempotentTag"
+          }
+        },
+        "required": [
+          "phrasings",
+          "client_tag",
+          "reply"
+        ],
+        "description": "Only one of `dialogue_id` or `parent_id` should exist."
+      },
+      "ListChatSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "session_id": {
+                  "type": "string"
+                },
+                "last_6_messages": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "msg_type": {
+                        "$ref": "#/components/schemas/MessageType"
+                      },
+                      "message": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "msg_type",
+                      "message"
+                    ]
+                  },
+                  "description": "Last 6 messages",
+                  "maxItems": 6,
+                  "minItems": 0
+                }
+              },
+              "description": "Preview of a session",
+              "required": [
+                "session_id",
+                "last_6_messages"
+              ]
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of sessions on the server",
+            "example": 10
+          }
+        },
+        "required": [
+          "sessions",
+          "total"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "chatToken": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "chatToken"
+      },
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": []
+}

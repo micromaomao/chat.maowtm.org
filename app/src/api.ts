@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as OpenApiValidator from "express-openapi-validator";
 import { OpenAIError, getEmbedding } from "./lib/chat/ai";
 import { dot, norm } from "./lib/vectools";
-import apiSpec from "../../api-spec/api.json";
+import apiSpec from "../../api.json";
 
 const apiRouter = Router();
 
