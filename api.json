@@ -115,7 +115,8 @@
             "description": "If provided, only messages older than this is returned.",
             "schema": {
               "type": "string"
-            }
+            },
+            "allowReserved": true
           }
         ],
         "responses": {
@@ -339,7 +340,8 @@
             "description": "",
             "schema": {
               "type": "string"
-            }
+            },
+            "allowReserved": true
           }
         ],
         "responses": {
@@ -386,7 +388,8 @@
               "minItems": 1,
               "maxItems": 30
             },
-            "required": true
+            "required": true,
+            "allowReserved": true
           },
           {
             "in": "query",
@@ -395,7 +398,8 @@
             "schema": {
               "type": "string"
             },
-            "required": true
+            "required": true,
+            "allowReserved": true
           }
         ],
         "requestBody": {},
@@ -618,8 +622,7 @@
         "description": "An arbitrary, max-48-chars tag provided by the client. For a limited period onwards, follow-on requests with the same tag are ignored (and returns the previously returned response). This tag is also returned in other useful context.",
         "example": "01H5FYF29S0Y5E8FKZJGB5P329",
         "minLength": 1,
-        "maxLength": 48,
-        "pattern": ""
+        "maxLength": 48
       },
       "ChatSession": {
         "type": "object",
@@ -738,7 +741,8 @@
       "chatToken": {
         "type": "apiKey",
         "in": "query",
-        "name": "chatToken"
+        "name": "chatToken",
+        "allowReserved": true
       },
       "adminToken": {
         "type": "http",
