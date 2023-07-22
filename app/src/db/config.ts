@@ -1,23 +1,38 @@
 import { with_db_client } from ".";
 import package_json from "../../package.json";
+import * as mq from "./messages"
+import * as path from "path";
+import { readFileSync } from "fs";
 
 const APP_VERSION = package_json.version;
-const CONFIG_RELOAD_TIMEOUT = 60 * 60 * 1000;
+
+const DEFAULT_PROMPT_TEMPLATE = readFileSync(path.join(__dirname, "default_prompt_template.txt"), "utf-8");
 
 export interface Config {
+  embedding_model: string;
+  generation_model: string;
+  init_messages: [number, string][];
+  prompt_template: string;
 }
 
 export class ConfigStore {
   static default_config(): Config {
     return {
+      embedding_model: "text-embedding-ada-002",
+      generation_model: "gpt-3.5-turbo",
+      init_messages: [
+        // 0 = bot, 1 = user
+        [0, "Hi, nice to meet you!"],
+      ],
+      prompt_template: DEFAULT_PROMPT_TEMPLATE,
     };
   }
 
-  cached_config: Config = null;
-  config_reload_timer = null;
-  last_config_reload_time = null;
+  private cached_config: Config = null;
+  private constructor() { }
 
-  async init() {
+  static async create_instance(): Promise<ConfigStore> {
+    let store = new ConfigStore();
     await with_db_client(async c => {
       const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
       if (rows.length == 0) {
@@ -26,30 +41,29 @@ export class ConfigStore {
           text: "insert into global_configuration (config, app_version) values ($1, $2)",
           values: [default_conf, APP_VERSION]
         });
-        this.cached_config = default_conf;
+        store.cached_config = default_conf;
       } else {
         const { config, app_version: stored_version } = rows[0];
         if (typeof config != "object") {
           throw new Error("Expected config to be a JSON object");
         }
-        this.cached_config = config;
+        store.cached_config = config;
         if (stored_version != APP_VERSION) {
           // TODO: migrate config
           await c.query({
             text: "insert into global_configuration (config, app_version) values ($1, $2)",
-            values: [this.cached_config, APP_VERSION]
+            values: [store.cached_config, APP_VERSION]
           });
         }
       }
     });
-    this.last_config_reload_time = Date.now();
-    this.start_config_reload_timer();
+    mq.queue.on(mq.MSG_APP_CONFIG_CHANGE, data => {
+      store.cached_config = data;
+    });
+    return store;
   }
 
   get config(): Config {
-    if (this.last_config_reload_time < Date.now() - 60000) {
-      this.refresh_config(); // don't await here
-    }
     return this.cached_config;
   }
 
@@ -61,52 +75,15 @@ export class ConfigStore {
         values: [new_config, APP_VERSION]
       });
     });
-  }
-
-  async refresh_config() {
-    if (this.config_reload_timer) {
-      clearTimeout(this.config_reload_timer);
-      this.config_reload_timer = null;
-    }
-    await with_db_client(async c => {
-      const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
-      if (rows.length == 0) {
-        throw new Error("No config found");
-      }
-      const { config, app_version: stored_version } = rows[0];
-      if (stored_version !== APP_VERSION) {
-        console.warn("Config version mismatch - server needs to be restarted");
-      }
-      if (typeof config != "object") {
-        throw new Error("Expected config to be a JSON object");
-      }
-      this.cached_config = config;
-    });
-    this.last_config_reload_time = Date.now();
-    this.start_config_reload_timer();
-  }
-
-  start_config_reload_timer() {
-    if (this.config_reload_timer) {
-      clearTimeout(this.config_reload_timer);
-    }
-    this.config_reload_timer = setTimeout(() => {
-      this.config_reload_timer = null;
-      try {
-        this.refresh_config();
-      } catch (e) {
-        throw new Error("Error reloading config: " + e.message);
-      }
-    }, CONFIG_RELOAD_TIMEOUT);
+    mq.queue.emit(mq.MSG_APP_CONFIG_CHANGE, new_config);
   }
 }
 
-let cached_store_promise = null;
+let cached_store_promise: Promise<ConfigStore> | null = null;
 
 export default function get_config_store(): Promise<ConfigStore> {
   if (!cached_store_promise) {
-    const cached_store = new ConfigStore();
-    cached_store_promise = cached_store.init().then(() => cached_store);
+    cached_store_promise = ConfigStore.create_instance();
   }
   return cached_store_promise;
 }

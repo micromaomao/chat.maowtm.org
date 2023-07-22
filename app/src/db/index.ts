@@ -11,6 +11,9 @@ const INIT_SQL = read_to_string("client_init.sql");
 const DROP_EVERYTHING_SQL = read_to_string("drop_everything.sql");
 const SCHEMA_SQL = read_to_string("schema.sql");
 
+const IDLE_TIMEOUT_MS = 5000;
+const CONNECT_TIMEOUT_MS = 10000;
+
 const APPLICATION_DB_VERSION = 1;
 
 let pg_pool = null;
@@ -37,7 +40,9 @@ export async function init() {
   }
   const hostname = new URL(url).hostname;
   pg_pool = new pg.Pool({
-    connectionString: url
+    connectionString: url,
+    idleTimeoutMillis: IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
   });
   pg_pool.on("connect", async client => {
     client.on("notice", msg => {

@@ -12,7 +12,7 @@ class AuthError {
 
 export async function requireAdminAuth(req, res, next) {
   // TODO
-  if (["::1", "127.0.0.1", "::ffff:127.0.0.1"].includes(req.ip) && !req.get("X-Forwarded-For")) {
+  if (process.env.NODE_ENV == "development" && ["::1", "127.0.0.1", "::ffff:127.0.0.1"].includes(req.ip) && !req.get("X-Forwarded-For")) {
     return next();
   }
   const auth_error = new AuthError();
