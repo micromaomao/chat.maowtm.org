@@ -3,7 +3,7 @@
  * intended to be extended with IPC functionality in the future.
  */
 
-import { EventEmitter } from "node:events"
+import { EventEmitter } from "node:events";
 
 class MessageQueue extends EventEmitter {
   constructor() {

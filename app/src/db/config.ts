@@ -1,6 +1,6 @@
 import { with_db_client } from ".";
 import package_json from "../../package.json";
-import * as mq from "./messages"
+import * as mq from "./messages";
 import * as path from "path";
 import { readFileSync } from "fs";
 
@@ -32,7 +32,7 @@ export class ConfigStore {
   private constructor() { }
 
   static async create_instance(): Promise<ConfigStore> {
-    let store = new ConfigStore();
+    const store = new ConfigStore();
     await with_db_client(async c => {
       const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
       if (rows.length == 0) {

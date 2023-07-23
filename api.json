@@ -50,10 +50,7 @@
                   "client_tag": {
                     "$ref": "#/components/schemas/IdempotentTag"
                   }
-                },
-                "required": [
-                  "client_tag"
-                ]
+                }
               }
             }
           }
@@ -222,8 +219,7 @@
                   }
                 },
                 "required": [
-                  "message",
-                  "client_tag"
+                  "message"
                 ]
               }
             }
@@ -685,8 +681,8 @@
       },
       "IdempotentTag": {
         "type": "string",
-        "description": "An arbitrary, max-48-chars tag provided by the client. For a limited period onwards, follow-on requests with the same tag are ignored (and returns the previously returned response). This tag is also returned in other useful context.",
-        "example": "01H5FYF29S0Y5E8FKZJGB5P329",
+        "description": "Optional - an arbitrary, max-48-chars tag provided by the client. For a limited period onwards, follow-on requests with the same tag are ignored (and returns the previously returned response). This tag is also returned in other useful context. You must ensure that this tag is a securely generated unique value per intended request.",
+        "example": "r9/dZCAekueKMhZ4bYETLMdz",
         "minLength": 1,
         "maxLength": 48
       },
@@ -745,7 +741,6 @@
         },
         "required": [
           "phrasings",
-          "client_tag",
           "reply"
         ],
         "description": "Only one of `dialogue_id` or `parent_id` should exist."
