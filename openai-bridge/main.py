@@ -1,6 +1,7 @@
 import logging
 from hashlib import sha256
 from os import environ
+from typing import Mapping
 
 import tiktoken
 from dotenv import load_dotenv
@@ -58,6 +59,13 @@ async def count_tokens_endpoint(request: Request):
   # print([encoding.decode([tok]) for tok in encoding.encode(text, disallowed_special=())])
   return JSONResponse({"count": result}, 200)
 
+def filter_headers(headers: Mapping[str, str]) -> dict:
+  filtered_headers = dict()
+  for k, v in headers.items():
+    if k.lower() in ["content-type"] or k.lower().startswith("x-"):
+      filtered_headers[k] = v
+  return filtered_headers
+
 async def openai_proxy(request: Request):
   body = None
   json_body = None
@@ -71,11 +79,7 @@ async def openai_proxy(request: Request):
         if not isinstance(json_body["user"], str):
           raise HTTPException(400, "Invalid .user")
         json_body["user"] = hash_user_id(json_body["user"])
-  filtered_headers = dict()
-  for k, v in request.headers.items():
-    if k.lower() in ["content-type"]:
-      filtered_headers[k] = v
-  res_ctx = openai_client.stream(request.method, request.url.path, params=request.query_params, content=body, json=json_body, headers=filtered_headers)
+  res_ctx = openai_client.stream(request.method, request.url.path, params=request.query_params, content=body, json=json_body, headers=filter_headers(request.headers))
   res = await res_ctx.__aenter__()
   exited = False
   try:
@@ -93,7 +97,7 @@ async def openai_proxy(request: Request):
           await res_ctx.__aexit__(e.__class__, e, e.__traceback__)
           exited = True
         raise e
-    return StreamingResponse(res_aiter(), status_code=res.status_code, headers=res.headers)
+    return StreamingResponse(res_aiter(), status_code=res.status_code, headers=filter_headers(res.headers))
   except Exception as e:
     if not exited:
       await res_ctx.__aexit__(e.__class__, e, e.__traceback__)
