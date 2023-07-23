@@ -1,4 +1,4 @@
-import { Router } from "express";
+import Router from "../../lib/promise_router";
 import * as OpenApiValidator from "express-openapi-validator";
 import apiSpec from "../../../../api.json";
 import adminRoutes from "./admin";

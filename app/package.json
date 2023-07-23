@@ -8,6 +8,7 @@
     "build": "export `cat .env.build`; parcel build src/index.html --public-url /",
     "parcel": "export `cat .env.local`; parcel src/index.html --public-url / --port 8000",
     "server:dev": "export `cat .env.local`; nodemon --watch src -e js,ts --exec 'node -r ts-node/register --inspect src/server.ts'",
+    "server:brk": "export `cat .env.local`; nodemon --watch src -e js,ts --exec 'node -r ts-node/register --inspect-brk src/server.ts'",
     "server:production": "export `cat .env.production`; node -r ts-node/register src/server.ts"
   },
   "alias": {

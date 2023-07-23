@@ -1,7 +1,7 @@
 import { dot, norm } from "../../lib/vectools";
 import get_config_store from "../../db/config";
 import { getEmbedding } from "../../lib/ai/openai";
-import { Router } from "express";
+import Router from "../../lib/promise_router";
 
 const apiRouter = Router();
 
