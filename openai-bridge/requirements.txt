@@ -1,0 +1,6 @@
+# openai~=0.20.0
+starlette~=0.30
+python-dotenv~=1.0
+httpx~=0.24
+uvicorn[standard]~=0.23
+tiktoken~=0.4
