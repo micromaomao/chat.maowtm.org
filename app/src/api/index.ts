@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { OpenAIError } from "../lib/ai";
+import { OpenAIError } from "../lib/ai/openai";
 import v1router from "./v1";
 
 const apiRouter = Router();
