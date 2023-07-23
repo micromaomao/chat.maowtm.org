@@ -18,7 +18,7 @@ class ClientTagManager {
     setInterval(() => this.cleanup(), 1000 * 10);
   }
 
-  async check_tag(tag: string | undefined): Promise<ClientTagEntry | null> {
+  async checkTag(tag: string | undefined): Promise<ClientTagEntry | null> {
     if (!tag) {
       return null;
     }
@@ -34,7 +34,7 @@ class ClientTagManager {
     return tag_entry;
   }
 
-  async set_tag(tag: string | undefined, response: any) {
+  async setTag(tag: string | undefined, response: any) {
     if (!tag) {
       return;
     }

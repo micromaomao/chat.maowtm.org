@@ -1,6 +1,6 @@
 import { dot, norm } from "../../lib/vectools";
 import get_config_store from "../../db/config";
-import { getEmbedding } from "../../lib/chat/ai";
+import { getEmbedding } from "../../lib/ai";
 import { Router } from "express";
 
 const apiRouter = Router();
@@ -58,7 +58,7 @@ apiRouter.get("/global-config", async (req, res) => {
 apiRouter.put("/global-config", async (req, res) => {
   const config_store = await get_config_store();
   const new_config = req.body;
-  await config_store.update_config(new_config);
+  await config_store.updateConfig(new_config);
   res.status(204).send();
 });
 

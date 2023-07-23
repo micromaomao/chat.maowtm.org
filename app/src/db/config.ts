@@ -16,7 +16,7 @@ export interface Config {
 }
 
 export class ConfigStore {
-  static default_config(): Config {
+  static defaultConfig(): Config {
     return {
       embedding_model: "text-embedding-ada-002",
       generation_model: "gpt-3.5-turbo",
@@ -31,12 +31,12 @@ export class ConfigStore {
   private cached_config: Config = null;
   private constructor() { }
 
-  static async create_instance(): Promise<ConfigStore> {
+  static async createInstance(): Promise<ConfigStore> {
     const store = new ConfigStore();
     await with_db_client(async c => {
       const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
       if (rows.length == 0) {
-        const default_conf = ConfigStore.default_config();
+        const default_conf = ConfigStore.defaultConfig();
         await c.query({
           text: "insert into global_configuration (config, app_version) values ($1, $2)",
           values: [default_conf, APP_VERSION]
@@ -67,7 +67,7 @@ export class ConfigStore {
     return this.cached_config;
   }
 
-  async update_config(new_config: Config) {
+  async updateConfig(new_config: Config) {
     this.cached_config = new_config;
     await with_db_client(async c => {
       await c.query({
@@ -83,7 +83,7 @@ let cached_store_promise: Promise<ConfigStore> | null = null;
 
 export default function get_config_store(): Promise<ConfigStore> {
   if (!cached_store_promise) {
-    cached_store_promise = ConfigStore.create_instance();
+    cached_store_promise = ConfigStore.createInstance();
   }
   return cached_store_promise;
 }

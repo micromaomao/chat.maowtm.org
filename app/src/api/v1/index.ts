@@ -24,7 +24,7 @@ apiRouter.use(adminRoutes);
 
 apiRouter.post("/chat-session", async (req, res) => {
   const client_tag = req.body.client_tag;
-  const tag_entry = await client_tags.check_tag(client_tag);
+  const tag_entry = await client_tags.checkTag(client_tag);
   if (tag_entry) {
     res.status(201).json(tag_entry.response);
     return;
@@ -40,7 +40,7 @@ apiRouter.post("/chat-session", async (req, res) => {
   const ret = {
     session_id, chat_token: token_str,
   };
-  await client_tags.set_tag(client_tag, ret);
+  await client_tags.setTag(client_tag, ret);
   res.status(201).json(ret);
 });
 

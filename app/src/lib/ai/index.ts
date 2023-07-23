@@ -104,3 +104,7 @@ export async function getEmbedding(params: EmbeddingParams, input: string, abort
     token_count: res.usage.total_tokens,
   };
 }
+
+export async function countTokens(model: string, input: string): Promise<number> {
+  throw new Error("Not implemented");
+}
