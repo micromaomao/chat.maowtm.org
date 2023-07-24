@@ -5,7 +5,7 @@ import adminRoutes from "./admin";
 import client_tags from "../../db/client_tag";
 import { withDBClient } from "../../db";
 import { generateToken, strToHashBuf } from "../../lib/secure_token";
-import { addChatMessage, fetchChatSession, fetchLastChatMessages } from "../../lib/chat";
+import { addChatMessage, fetchChatSession, fetchLastChatMessages, newChatSssion } from "../../lib/chat";
 import getConfigStore from "../../db/config";
 import { Client as DBClient } from "../../db";
 import { InvalidChatSessionError, hasValidAdminAuth } from "../basic"
@@ -26,32 +26,12 @@ apiRouter.use(OpenApiValidator.middleware({
 
 apiRouter.post("/chat-session", async (req, res) => {
   const client_tag = req.body.client_tag;
-  const config_store = await getConfigStore();
   const tag_entry = await client_tags.checkTag(client_tag);
   if (tag_entry) {
     res.status(201).json(tag_entry.response);
     return;
   }
-  const [token_str, token_buf] = await generateToken();
-  const session_id = await withDBClient(async db => {
-    await db.query("start transaction isolation level serializable;");
-    const res = await db.query({
-      text: "insert into chat_session (session_token) values ($1) returning session_id;",
-      values: [token_buf],
-    });
-    let session_id = res.rows[0].session_id;
-    let init_messages = config_store.config.init_messages;
-    for (let [msg_type, content] of init_messages) {
-      await addChatMessage({
-        session_id, msg_type, content, supress_generation: true,
-      }, db);
-    }
-    await db.query("commit;");
-    return session_id;
-  });
-  const ret = {
-    session_id, chat_token: token_str,
-  };
+  const ret = await newChatSssion();
   await client_tags.setTag(client_tag, ret);
   res.status(201).json(ret);
 });

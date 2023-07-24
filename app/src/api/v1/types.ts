@@ -33,3 +33,8 @@ export interface ChatSuggestions {
   suggestions: string[];
   reply_msg: string;
 }
+
+export interface NewChatSessionResult {
+  session_id: string;
+  chat_token: string;
+}
