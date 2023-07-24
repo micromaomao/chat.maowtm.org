@@ -244,6 +244,8 @@ This usually indicates a limit that is too small compared to the length of the s
         throw new Error(`Expected assistant role to reply - got ${completion_res.role}`);
       }
 
+      // TODO: parse suggestions, and add them asynchronously if there are any
+
       return await withDBClient(async db => addChatMessage({
         session_id: this.session_id,
         msg_type: MsgType.Bot,

@@ -15,7 +15,6 @@ export interface FetchLastChatMessagesOptions {
   until?: string;
   limit: number;
   db_client?: DBClient;
-  is_admin?: boolean;
 }
 
 export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions): Promise<FetchedChatMessage[]> {

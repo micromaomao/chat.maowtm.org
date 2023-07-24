@@ -1,6 +1,6 @@
 import { FetchedChatSession, fetchChatSession } from "lib/chat";
 import { strToHashBuf } from "lib/secure_token";
-import { Client as DBClient } from "db/index";
+import { Client as DBClient, withDBClient } from "db/index";
 
 export class APIError extends Error {
   status;
@@ -57,7 +57,10 @@ export async function requireValidChatTokenAuth(req, session_id: string, db: DBC
   return res.rows[0] as FetchedChatSession;
 }
 
-export async function requireValidChatTokenOrAdmin(req, session_id: string, db: DBClient): Promise<FetchedChatSession> {
+export async function requireValidChatTokenOrAdmin(req, session_id: string, db?: DBClient): Promise<FetchedChatSession> {
+  if (!db) {
+    return await withDBClient(db => requireValidChatTokenOrAdmin(req, session_id, db));
+  }
   let session: FetchedChatSession;
   if (await hasValidAdminAuth(req) === true) {
     session = await fetchChatSession(session_id, db);

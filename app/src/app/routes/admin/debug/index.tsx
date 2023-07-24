@@ -2,7 +2,7 @@ import React from "react";
 import { AccordionHeader, AccordionItem, AccordionPanel } from "@fluentui/react-components";
 import EmbeddingsTest from "./embeddingsTest";
 import Accordion from "app/utils/sharedstateaccordion";
-import { KnownEmbeddingModels } from "lib/ai/openai";
+import { KnownEmbeddingModels } from "lib/openai";
 
 export function Component() {
   return (
