@@ -2,6 +2,7 @@ import express from "express";
 import api from "./api";
 import * as db from "./db";
 import { OpenAIError } from "./lib/ai/openai";
+import { APIError } from "./api/basic";
 
 (async () => {
   await db.init();
@@ -16,7 +17,11 @@ import { OpenAIError } from "./lib/ai/openai";
   app.use(express.static("./dist"));
 
   app.use("/api", (err, req, res, next) => {
-    if (err.status >= 400 && err.status < 500) {
+    if (err instanceof APIError) {
+      res.status(err.status);
+      res.type("text");
+      res.send(err.message);
+    } else if (err.status >= 400 && err.status < 500) {
       res.status(err.status);
       res.type("text");
       res.send(`API validation error: ${err.message}`);

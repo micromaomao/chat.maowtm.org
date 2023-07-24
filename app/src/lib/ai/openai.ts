@@ -85,7 +85,7 @@ interface ResponseWithTokenCount<T> {
 
 export async function getEmbedding(params: EmbeddingParams, input: string, abortSignal: AbortSignal | undefined = undefined): Promise<ResponseWithTokenCount<number[]>> {
   console.log(`OpenAI GET embeddings { model: ${params.model}, input: ${input2log(input)} }`);
-  const res = await parseResponse(await fetch(API_BASE + "embeddings", {
+  const res = await parseResponse(await fetch(new URL("embeddings", API_BASE), {
     body: JSON.stringify({
       model: params.model,
       input,
@@ -106,5 +106,15 @@ export async function getEmbedding(params: EmbeddingParams, input: string, abort
 }
 
 export async function countTokens(model: string, input: string): Promise<number> {
-  throw new Error("Not implemented");
+  console.log(`OpenAI GET _/count-tokens { model: ${model}, input: ${input2log(input)} }`);
+  const res = await parseResponse(await fetch(new URL(`_/count-tokens?model=${encodeURIComponent(model)}`, API_BASE), {
+    body: input,
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain",
+      "Authorization": "Bearer " + API_KEY,
+      "Accept": "application/json",
+    },
+  }));
+  return res.count;
 }

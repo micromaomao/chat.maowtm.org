@@ -6,7 +6,7 @@ const TOKEN_LENGTH = 24;
  * Generate a secure token, returning the string that should be provided to the
  * user, and a buffer containing a secure hash of the token.
  */
-export function generate_token(): Promise<[string, Buffer]> {
+export function generateToken(): Promise<[string, Buffer]> {
   return new Promise((resolve, reject) => {
     randomBytes(TOKEN_LENGTH, (err, token_data) => {
       if (err) {
@@ -25,7 +25,7 @@ export function generate_token(): Promise<[string, Buffer]> {
   });
 }
 
-export function str_to_hash_buf(token_str: string): Buffer | null {
+export function strToHashBuf(token_str: string): Buffer | null {
   if (!token_str.startsWith(TOKEN_PREFIX)) {
     return null;
   }

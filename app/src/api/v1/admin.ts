@@ -1,23 +1,10 @@
 import { dot, norm } from "../../lib/vectools";
-import get_config_store from "../../db/config";
+import getConfigStore from "../../db/config";
 import { getEmbedding } from "../../lib/ai/openai";
 import Router from "../../lib/promise_router";
+import { requireAdminAuth } from "../basic";
 
 const apiRouter = Router();
-
-class AuthError {
-  status = 401;
-  message = "Unauthorized";
-}
-
-export async function requireAdminAuth(req, res, next) {
-  // TODO
-  if (process.env.NODE_ENV == "development" && ["::1", "127.0.0.1", "::ffff:127.0.0.1"].includes(req.ip) && !req.get("X-Forwarded-For")) {
-    return next();
-  }
-  const auth_error = new AuthError();
-  return next(auth_error);
-}
 
 apiRouter.use(requireAdminAuth);
 
@@ -51,12 +38,12 @@ apiRouter.get("/debug-embeddings", async (req, res) => {
 });
 
 apiRouter.get("/global-config", async (req, res) => {
-  const config_store = await get_config_store();
+  const config_store = await getConfigStore();
   res.json(config_store.config);
 });
 
 apiRouter.put("/global-config", async (req, res) => {
-  const config_store = await get_config_store();
+  const config_store = await getConfigStore();
   const new_config = req.body;
   await config_store.updateConfig(new_config);
   res.status(204).send();

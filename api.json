@@ -548,7 +548,7 @@
           },
           "session": {
             "type": "string",
-            "description": "ID of the chat session which this message belongs to. Property may exist if this is implied (such as as part of a event stream response for a chat)",
+            "description": "ID of the chat session which this message belongs to. Property may not exist if this is implied (such as as part of a event stream response for a chat)",
             "example": "01H5FMG00F2N8EM9365KSSMYG9"
           },
           "msg_type": {
@@ -561,13 +561,13 @@
             "minLength": 1
           },
           "metadata": {
-            "$ref": "#/components/schemas/MessageMetadata"
+            "$ref": "#/components/schemas/BriefMessageMetadata"
           },
           "client_tag": {
             "type": "string",
             "description": "The idempotent tag provided by the client in send_chat request. Not available if too long since message creation.",
-            "maxLength": 32,
-            "example": "01H5FXMB77KNQX0CZSM86W1824"
+            "maxLength": 48,
+            "example": "r9/dZCAekueKMhZ4bYETLMdz"
           }
         },
         "description": "Create or update a message.",
@@ -577,20 +577,23 @@
           "content"
         ]
       },
-      "MessageMetadata": {
+      "BriefMessageMetadata": {
         "type": "object",
         "properties": {
-          "best_match": {
-            "$ref": "#/components/schemas/MetadataDialoguePath"
-          },
           "updated_before": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Only visible to admin"
+          },
+          "user_feedback": {
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 1
           }
         },
-        "description": "Message metadata for chat editing. Only visible if admin authentication present. Only available on bot messages.",
+        "description": "Some short message metadata.",
         "required": [
-          "updated_before"
+          "user_feedback"
         ]
       },
       "MetadataDialoguePath": {
@@ -598,7 +601,7 @@
         "items": {
           "type": "object",
           "properties": {
-            "dialog_id": {
+            "dialogue_id": {
               "type": "string",
               "example": "01H5FQ2CCMX9P8ZT6XA80RR9MQ"
             },
@@ -610,7 +613,7 @@
           },
           "description": "Dialogue path items in parent-child order",
           "required": [
-            "dialog_id",
+            "dialogue_id",
             "canonical_phrasing_text"
           ]
         },
@@ -802,7 +805,7 @@
       "chatToken": {
         "type": "apiKey",
         "in": "query",
-        "name": "chatToken",
+        "name": "chat_token",
         "allowReserved": true
       },
       "adminToken": {

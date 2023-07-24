@@ -1,8 +1,9 @@
-import { with_db_client } from ".";
+import { withDBClient } from ".";
 import package_json from "../../package.json";
 import * as mq from "./messages";
 import * as path from "path";
 import { readFileSync } from "fs";
+import { MsgType } from "./enums";
 
 const APP_VERSION = package_json.version;
 
@@ -11,7 +12,7 @@ const DEFAULT_PROMPT_TEMPLATE = readFileSync(path.join(__dirname, "default_promp
 export interface Config {
   embedding_model: string;
   generation_model: string;
-  init_messages: [number, string][];
+  init_messages: [MsgType, string][];
   prompt_template: string;
 }
 
@@ -21,8 +22,7 @@ export class ConfigStore {
       embedding_model: "text-embedding-ada-002",
       generation_model: "gpt-3.5-turbo",
       init_messages: [
-        // 0 = bot, 1 = user
-        [0, "Hi, nice to meet you!"],
+        [MsgType.Bot, "Hi, nice to meet you!"],
       ],
       prompt_template: DEFAULT_PROMPT_TEMPLATE,
     };
@@ -33,7 +33,7 @@ export class ConfigStore {
 
   static async createInstance(): Promise<ConfigStore> {
     const store = new ConfigStore();
-    await with_db_client(async c => {
+    await withDBClient(async c => {
       const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
       if (rows.length == 0) {
         const default_conf = ConfigStore.defaultConfig();
@@ -69,7 +69,7 @@ export class ConfigStore {
 
   async updateConfig(new_config: Config) {
     this.cached_config = new_config;
-    await with_db_client(async c => {
+    await withDBClient(async c => {
       await c.query({
         text: "insert into global_configuration (config, app_version) values ($1, $2)",
         values: [new_config, APP_VERSION]
@@ -81,7 +81,7 @@ export class ConfigStore {
 
 let cached_store_promise: Promise<ConfigStore> | null = null;
 
-export default function get_config_store(): Promise<ConfigStore> {
+export default function getConfigStore(): Promise<ConfigStore> {
   if (!cached_store_promise) {
     cached_store_promise = ConfigStore.createInstance();
   }

@@ -18,7 +18,9 @@ const APPLICATION_DB_VERSION = 1;
 
 let pg_pool = null;
 
-export async function populate_db(client: pg.Client) {
+export type Client = pg.Client;
+
+export async function populateDB(client: Client) {
   if (process.env.NODE_ENV == "development") {
     console.log("In development mode - dropping everything beforehand...");
     await client.query(DROP_EVERYTHING_SQL);
@@ -62,7 +64,7 @@ export async function init() {
     } catch (err) {
       console.error("Failed to load migration state from database:", err.message);
       console.log("Populating database...");
-      await populate_db(client);
+      await populateDB(client);
       rows = (await client.query("select * from db_migration_state;")).rows;
     }
     if (rows.length != 1) {
@@ -77,7 +79,7 @@ export async function init() {
   }
 }
 
-export async function with_db_client<R, F extends (client: pg.Client) => Promise<R>>(f: F): Promise<R> {
+export async function withDBClient<R, F extends (client: Client) => Promise<R>>(f: F): Promise<R> {
   if (!pg_pool) {
     throw new Error("Database not initialized");
   }
@@ -85,6 +87,8 @@ export async function with_db_client<R, F extends (client: pg.Client) => Promise
   try {
     return await f(client);
   } finally {
+    // Prevent accidental uncommitted transactions from persisting.
+    await client.query("rollback");
     client.release();
   }
 }

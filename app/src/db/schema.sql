@@ -53,6 +53,7 @@ create table chat_message (
   old_regenerated boolean not null default false,
 
   -- Name of LLM used to generate this (or, for a user message, a reply to this).
+  -- This field mostly exist as a cache hint for nb_tokens.
   generation_model text default null,
 
   -- Number of tokens using the tokenization scheme of .generation_model
