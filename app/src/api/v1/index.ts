@@ -72,7 +72,7 @@ apiRouter.get("/chat-session/:session_id/stream", async (req, res) => {
       session: msg.session_id,
       msg_type: msgTypeToStr(msg.msg_type),
       content: msg.content,
-      client_tag: await client_tags.ulidToTag(msg.id),
+      client_tag: msg.client_tag || await client_tags.ulidToTag(msg.id),
       metadata: {
         updated_before: false,
         user_feedback: 0
@@ -91,6 +91,7 @@ apiRouter.get("/chat-session/:session_id/stream", async (req, res) => {
     closed = true;
     res.end();
     mq.queue.off(session_id, listener);
+    console.log("closed");
   });
   mq.queue.on(session_id, listener);
 
@@ -118,6 +119,7 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
       msg_type: MsgType.User,
       content,
       generation_model: config.generation_model,
+      client_tag,
     }, db);
   });
   let msg_id = msg.id;

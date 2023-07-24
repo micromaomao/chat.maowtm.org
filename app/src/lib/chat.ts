@@ -65,6 +65,7 @@ export interface NewChatMessage {
   nb_tokens?: number;
   supress_generation?: boolean;
   reply_metadata?: NewChatMessageReplyMetadata;
+  client_tag?: string;
 }
 
 export interface NewChatMessageEvent extends NewChatMessage {
@@ -104,7 +105,7 @@ export async function addChatMessage(message: NewChatMessage, db_client: DBClien
   if (message.msg_type == MsgType.User && !message.supress_generation) {
     await startBackgroundGenerateResponseTask(msg_evt);
   }
-  return id;
+  return msg_evt;
 }
 
 // export async function fetchChatMessage(message_id: string, db_client: DBClient): Promise<ChatMessage | null> {

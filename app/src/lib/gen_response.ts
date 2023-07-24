@@ -268,7 +268,7 @@ This usually indicates a limit that is too small compared to the length of the s
     }
     if (!error) {
       console.log(`Generated reply for ${this.last_message_id} in ${this.session_id}:\n\
-> ${input2log(this.message_evt?.content)}\
+> ${input2log(this.message_evt?.content)}\n\
 < ${input2log(new_msg?.content)}`);
     }
     // TODO
