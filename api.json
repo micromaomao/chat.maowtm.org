@@ -633,14 +633,13 @@
           },
           "suggestions": {
             "$ref": "#/components/schemas/ChatSuggestions"
+          },
+          "ping": {
+            "type": "string",
+            "description": "A ping message sent periodically every 5 seconds to allow the client to detect dead connections"
           }
         },
-        "description": "A sequence of server-sent events, can be any of the following event type:",
-        "required": [
-          "message",
-          "deleteMessage",
-          "suggestions"
-        ]
+        "description": "A sequence of server-sent events, can be any of the following event type:"
       },
       "ChatSuggestions": {
         "type": "object",

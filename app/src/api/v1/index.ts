@@ -91,12 +91,19 @@ apiRouter.get("/chat-session/:session_id/stream", async (req, res) => {
     closed = true;
     res.end();
     mq.queue.off(session_id, listener);
-    console.log("closed");
   });
   mq.queue.on(session_id, listener);
 
   res.status(200).type("text/event-stream");
   res.flushHeaders();
+
+  let ping_interval = setInterval(() => {
+    if (closed) {
+      clearInterval(ping_interval);
+      return;
+    }
+    res.write('event: ping\ndata: "ping"\n\n');
+  }, 5000);
 });
 
 apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
