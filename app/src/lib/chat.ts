@@ -1,10 +1,10 @@
-import getConfigStore from "../db/config";
-import { Client as DBClient, withDBClient } from "../db";
+import getConfigStore from "db/config";
+import { Client as DBClient, withDBClient } from "db/index";
 import { countTokens } from "./ai/openai";
-import * as mq from "../db/messages";
+import * as mq from "db/messages";
 import { FetchedChatMessage, FetchedChatMessageMetadata, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
-import { MsgType } from "../db/enums";
-import client_tags from "../db/client_tag";
+import { MsgType } from "db/enums";
+import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token";
 

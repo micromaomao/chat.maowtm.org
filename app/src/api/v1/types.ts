@@ -1,4 +1,4 @@
-import { MsgType } from "../../db/enums";
+import { MsgType } from "db/enums";
 
 export enum MsgTypeStr {
   Bot = "bot",

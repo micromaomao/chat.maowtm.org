@@ -1,13 +1,12 @@
-import Router from "../../lib/promise_router";
+import Router from "lib/promise_router";
 import * as OpenApiValidator from "express-openapi-validator";
 import apiSpec from "../../../../api.json";
 import adminRoutes from "./admin";
-import client_tags from "../../db/client_tag";
-import { withDBClient } from "../../db";
-import { generateToken, strToHashBuf } from "../../lib/secure_token";
-import { addChatMessage, fetchChatSession, fetchLastChatMessages, newChatSssion } from "../../lib/chat";
-import getConfigStore from "../../db/config";
-import { Client as DBClient } from "../../db";
+import client_tags from "db/client_tag";
+import { generateToken, strToHashBuf } from "lib/secure_token";
+import { addChatMessage, fetchChatSession, fetchLastChatMessages, newChatSssion } from "lib/chat";
+import getConfigStore from "db/config";
+import { withDBClient, Client as DBClient } from "db/index";
 import { InvalidChatSessionError, hasValidAdminAuth } from "../basic"
 
 const apiRouter = Router();

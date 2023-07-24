@@ -16,9 +16,13 @@
     "incremental": true,
     "paths": {
       "app/*": ["./src/app/*"],
-      "lib/*": ["./src/lib/*"]
+      "lib/*": ["./src/lib/*"],
+      "db/*": ["./src/db/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"]
+  }
 }
