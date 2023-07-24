@@ -3,9 +3,15 @@ import { NewChatMessageEvent, fetchLastChatMessages } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
 import { input2log } from "./utils";
 import getConfigStore from "db/config";
-import { countTokens, getEmbedding } from "./ai/openai";
+import { countTokens, getEmbedding } from "./openai";
+import { MatchDialogueResult, matchDialogue } from "./match_dialogue";
 
 let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
+
+const PROMPT_SAMPLE_REPLACEMENT_TEXT = "<|DIALOGUE_ITEMS|>";
+const PROMPT_SAMPLE_USER_PREFIX = "User: ";
+const PROMPT_SAMPLE_BOT_PREFIX = "You: ";
+const PROMPT_SAMPLE_NO_CONTENT = "(no relevant content found)";
 
 /**
  * The delay before starting the generation task.
@@ -18,6 +24,12 @@ const GENERATION_START_DELAY = 500;
 
 const GENERATION_RETRY_INITIAL_DELAY = 500;
 const GENERATION_MAX_RETRY_COUNT = 2;
+
+class UnrecoverableGenerationError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
 
 class GenerationTask {
   private abort_controller: AbortController;
@@ -78,7 +90,10 @@ class GenerationTask {
       console.error(`(Attempt ${this.retry_count + 1} / ${GENERATION_MAX_RETRY_COUNT + 1}) \
 Error generating reply for ${this.last_message_id} (${input2log(this.message_evt?.content)}) \
 in ${this.session_id}:`, e);
-      if (this.retry_count >= GENERATION_MAX_RETRY_COUNT) {
+      if (e instanceof UnrecoverableGenerationError) {
+        console.error("Above error is unrecoverable, not retrying.");
+      }
+      if (e instanceof UnrecoverableGenerationError || this.retry_count >= GENERATION_MAX_RETRY_COUNT) {
         await this.done(e, null);
       } else {
         this.retry_count += 1;
@@ -95,11 +110,15 @@ in ${this.session_id}:`, e);
     let { generation_model, embedding_model } = config;
     const cancelledError = new Error("Cancelled");
 
-    let message_hist = await withDBClient<any[]>(async db => {
+    let curr_total_tokens = config.prompt_template_token_count;
+    let match_res: MatchDialogueResult;
+    let msg_hist: any[];
+
+    await withDBClient(async db => {
       if (this.cancelled) {
         throw cancelledError;
       }
-      let { rows }: { rows: any[] } = await db.query({
+      msg_hist = (await db.query({
         name: "gen_responses.ts#GenerationTask#attempt#fetch_last_messages",
         text: `
           select
@@ -116,17 +135,17 @@ in ${this.session_id}:`, e);
           order by id desc
           limit $3;`,
         values: [embedding_model, this.session_id, config.generation_history_limit],
-      });
+      })).rows;
       if (this.cancelled) {
         throw cancelledError;
       }
-      if (rows.length == 0 || rows[0].id != this.last_message_id) {
+      if (msg_hist.length == 0 || msg_hist[0].id != this.last_message_id) {
         this.cancel();
         throw cancelledError;
       }
-      let curr_total_tokens = config.prompt_template_token_count;
-      for (let i = 0; i < rows.length; i++) {
-        let row = rows[i];
+
+      for (let i = 0; i < msg_hist.length; i++) {
+        let row = msg_hist[i];
         if (this.cancelled) {
           throw cancelledError;
         }
@@ -137,7 +156,7 @@ in ${this.session_id}:`, e);
         let curr_token_comsumption = row.nb_tokens + 1;
         if (curr_total_tokens + curr_token_comsumption > config.generation_token_limit) {
           // Delete this and all subsequent rows
-          rows = rows.splice(i, rows.length - i);
+          msg_hist.splice(i, msg_hist.length - i);
           break;
         }
         curr_total_tokens += curr_token_comsumption;
@@ -146,13 +165,51 @@ in ${this.session_id}:`, e);
           throw cancelledError;
         }
       }
-      return rows;
+      if (this.cancelled) {
+        throw cancelledError;
+      }
+
+      if (msg_hist.length == 0) {
+        throw new UnrecoverableGenerationError("No message history");
+      }
+      msg_hist.reverse();
+
+      match_res = await matchDialogue(msg_hist, this.abort_controller.signal, db);
     });
+
+    let sample_texts = [];
+    if (match_res.direct_result) {
+      // TODO
+      throw new UnrecoverableGenerationError("Unimplemented");
+    }
+    for (let phrasing_id of match_res.matched_phrasings) {
+      curr_total_tokens += 1; // Overhead
+      // TODO
+      throw new UnrecoverableGenerationError("Unimplemented");
+    }
+    if (sample_texts.length == 0) {
+      sample_texts.push(PROMPT_SAMPLE_NO_CONTENT);
+      curr_total_tokens += await countTokens(generation_model, PROMPT_SAMPLE_NO_CONTENT);
+    }
+    // TODO: do stuff with match_res
     if (this.cancelled) {
-      return;
+      throw cancelledError;
     }
 
-    throw new Error("TODO");
+    if (!config.prompt_template.includes(PROMPT_SAMPLE_REPLACEMENT_TEXT)) {
+      throw new UnrecoverableGenerationError("Prompt template does not contain replacement text");
+    }
+    let prompt = config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, sample_texts.join("\n\n"));
+
+    while (curr_total_tokens > config.generation_token_limit) {
+      let last_msg = msg_hist.pop();
+      if (!last_msg) {
+        throw new UnrecoverableGenerationError("No message history");
+      }
+      curr_total_tokens -= last_msg.nb_tokens + 1;
+    }
+
+    throw new UnrecoverableGenerationError("TODO");
   }
 
   private async done(error: Error | null, new_msg: NewChatMessageEvent | null) {

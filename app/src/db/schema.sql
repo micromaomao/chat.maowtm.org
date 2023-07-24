@@ -143,9 +143,13 @@ create table chat_reply_metadata (
   reply_msg text not null references chat_message (id) on delete cascade primary key,
 
   -- References to dialogue_phrasing
-  matched text[] not null,
+  matched_phrasings text[] not null,
 
   match_scores float8[] not null,
+
+  -- This field is technically redundant if we never delete any phrasings, but
+  -- it's here in case we deleted the phrasing but not the dialogue item.
+  -- Editing UI uses this directly rather than inspecting matched_phrasings.
   best_match_dialogue text default null references dialogue_item (id) on delete set null,
 
   -- The above 3 fields can be empty / null if no good match

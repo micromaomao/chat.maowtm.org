@@ -1,6 +1,6 @@
 import getConfigStore from "db/config";
 import { Client as DBClient, withDBClient } from "db/index";
-import { countTokens } from "./ai/openai";
+import { countTokens } from "./openai";
 import * as mq from "db/messages";
 import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
 import { MsgType } from "db/enums";
@@ -8,6 +8,7 @@ import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token";
 import { startBackgroundGenerateResponseTask } from "./gen_response";
+import { MatchDialogueResult } from "./match_dialogue";
 
 export interface FetchLastChatMessagesOptions {
   session_id: string;
@@ -71,12 +72,8 @@ export interface NewChatMessageEvent extends NewChatMessage {
   id: string;
 }
 
-export interface NewChatMessageReplyMetadata {
-  matched: string[];
-  match_scores: number[];
-  best_match_dialogue: string | null;
+export interface NewChatMessageReplyMetadata extends MatchDialogueResult {
   model_chat_inputs: string[];
-  direct_result: boolean;
   regen_of?: string;
 }
 
@@ -94,9 +91,9 @@ export async function addChatMessage(message: NewChatMessage, db_client: DBClien
   let mtd = message.reply_metadata;
   if (mtd) {
     await db_client.query({
-      text: "insert into chat_reply_metadata (reply_msg, matched, match_scores, best_match_dialogue, model_chat_inputs, direct_result, regen_of) values ($1, $2, $3, $4, $5, $6, $7);",
+      text: "insert into chat_reply_metadata (reply_msg, matched_phrasings, match_scores, best_match_dialogue, model_chat_inputs, direct_result, regen_of) values ($1, $2, $3, $4, $5, $6, $7);",
       values: [
-        id, mtd.matched, mtd.match_scores, mtd.best_match_dialogue, mtd.model_chat_inputs, mtd.direct_result, mtd.regen_of
+        id, mtd.matched_phrasings, mtd.match_scores, mtd.best_match_dialogue, mtd.model_chat_inputs, mtd.direct_result, mtd.regen_of
       ]
     });
   }
