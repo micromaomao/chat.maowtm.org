@@ -22,7 +22,10 @@ OPENAI_API_KEY = environ.get("OPENAI_API_KEY")
 OPENAI_API_BASE = environ.get("OPENAI_API_BASE")
 AUTHORIZATION_KEY = environ.get("AUTHORIZATION_KEY")
 UID_HASH_SALT = environ.get("UID_HASH_SALT")
+OPENAI_REQ_LOG_FILE = environ.get("OPENAI_REQ_LOG_FILE", "/dev/null")
 MAX_TOKENS = 4096
+
+log_file = open(OPENAI_REQ_LOG_FILE, "ta")
 
 openai_client = AsyncClient(base_url=OPENAI_API_BASE, headers={
   "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -81,6 +84,18 @@ async def openai_proxy(request: Request):
         json_body["user"] = hash_user_id(json_body["user"])
   res_ctx = openai_client.stream(request.method, request.url.path, params=request.query_params, content=body, json=json_body, headers=filter_headers(request.headers))
   res = await res_ctx.__aenter__()
+  log_entry = {
+    "url": request.url.path,
+    "method": request.method,
+    "query_params": dict(request.query_params),
+    "body": json_body if json_body is not None else body,
+    "res": {
+      "status": res.status_code,
+    }
+  }
+  json.dump(log_entry, log_file)
+  log_file.write("\n")
+  log_file.flush()
   exited = False
   try:
     aiter_bytes = res.aiter_bytes()

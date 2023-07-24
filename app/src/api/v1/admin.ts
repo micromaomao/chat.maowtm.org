@@ -1,6 +1,6 @@
 import { dot, norm } from "lib/vectools";
 import getConfigStore from "db/config";
-import { getEmbedding } from "lib/ai/openai";
+import { getEmbedding } from "lib/openai";
 import Router from "lib/promise_router";
 import { requireAdminAuth } from "../basic";
 

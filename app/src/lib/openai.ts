@@ -78,7 +78,7 @@ interface ResponseWithTokenCount<T> {
   token_count: number;
 }
 
-export async function getEmbedding(params: EmbeddingParams, input: string, abortSignal: AbortSignal | undefined = undefined): Promise<ResponseWithTokenCount<number[]>> {
+export async function getEmbedding(params: EmbeddingParams, input: string, abortSignal?: AbortSignal): Promise<ResponseWithTokenCount<number[]>> {
   console.log(`OpenAI GET embeddings { model: ${params.model}, input: ${input2log(input)} }`);
   const res = await parseResponse(await fetch(new URL("embeddings", API_BASE), {
     body: JSON.stringify({
@@ -112,4 +112,49 @@ export async function countTokens(model: string, input: string): Promise<number>
     },
   }));
   return res.count;
+}
+
+export type OpenAIChatRole = "system" | "user" | "assistant";
+
+export interface ChatCompletionParams {
+  model: string;
+  messages: {
+    role: OpenAIChatRole;
+    name?: string;
+    content: string;
+  }[];
+  temperature?: number;
+  top_p?: number;
+  max_tokens: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  user?: string;
+}
+
+export interface ChatCompletionResponse {
+  role: OpenAIChatRole;
+  content: string;
+  completion_tokens: number;
+  total_tokens: number;
+};
+
+export async function getChatCompletion(params: ChatCompletionParams, abortSignal?: AbortSignal): Promise<ChatCompletionResponse> {
+  console.log(`OpenAI POST chat/completions { model: ${params.model}, messages: (len = ${params.messages.length}) }`);
+  const res = await parseResponse(await fetch(new URL("chat/completions", API_BASE), {
+    body: JSON.stringify(params),
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + API_KEY,
+      "Accept": "application/json",
+    },
+    signal: abortSignal,
+  }));
+  const message = res.choices[0].message;
+  return {
+    role: message.role,
+    content: message.content,
+    completion_tokens: res.usage.completion_tokens,
+    total_tokens: res.usage.total_tokens,
+  }
 }

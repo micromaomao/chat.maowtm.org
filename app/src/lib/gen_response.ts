@@ -1,9 +1,9 @@
 import { MsgType } from "db/enums";
-import { NewChatMessageEvent, fetchLastChatMessages } from "./chat"
+import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
 import { input2log } from "./utils";
 import getConfigStore from "db/config";
-import { countTokens, getEmbedding } from "./openai";
+import { ChatCompletionParams, countTokens, getChatCompletion, getEmbedding } from "./openai";
 import { MatchDialogueResult, matchDialogue } from "./match_dialogue";
 
 let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
@@ -12,6 +12,8 @@ const PROMPT_SAMPLE_REPLACEMENT_TEXT = "<|DIALOGUE_ITEMS|>";
 const PROMPT_SAMPLE_USER_PREFIX = "User: ";
 const PROMPT_SAMPLE_BOT_PREFIX = "You: ";
 const PROMPT_SAMPLE_NO_CONTENT = "(no relevant content found)";
+
+const MODEL_PER_MESSAGE_TOKEN_OVERHEAD = 2;
 
 /**
  * The delay before starting the generation task.
@@ -22,8 +24,8 @@ const PROMPT_SAMPLE_NO_CONTENT = "(no relevant content found)";
  */
 const GENERATION_START_DELAY = 500;
 
-const GENERATION_RETRY_INITIAL_DELAY = 500;
-const GENERATION_MAX_RETRY_COUNT = 2;
+const GENERATION_RETRY_INITIAL_DELAY = 1000;
+const GENERATION_MAX_RETRY_COUNT = 1;
 
 class UnrecoverableGenerationError extends Error {
   constructor(message: string) {
@@ -111,14 +113,16 @@ in ${this.session_id}:`, e);
     const cancelledError = new Error("Cancelled");
 
     let curr_total_tokens = config.prompt_template_token_count;
+    let max_prompt_tokens = config.generation_total_token_limit - config.generation_reserve_token_count;
     let match_res: MatchDialogueResult;
-    let msg_hist: any[];
+    let msg_hist_full: any[];
+    let sample_texts = [];
 
     await withDBClient(async db => {
       if (this.cancelled) {
         throw cancelledError;
       }
-      msg_hist = (await db.query({
+      msg_hist_full = (await db.query({
         name: "gen_responses.ts#GenerationTask#attempt#fetch_last_messages",
         text: `
           select
@@ -139,13 +143,12 @@ in ${this.session_id}:`, e);
       if (this.cancelled) {
         throw cancelledError;
       }
-      if (msg_hist.length == 0 || msg_hist[0].id != this.last_message_id) {
+      if (msg_hist_full.length == 0 || msg_hist_full[0].id != this.last_message_id) {
         this.cancel();
         throw cancelledError;
       }
 
-      for (let i = 0; i < msg_hist.length; i++) {
-        let row = msg_hist[i];
+      for (let row of msg_hist_full) {
         if (this.cancelled) {
           throw cancelledError;
         }
@@ -153,63 +156,107 @@ in ${this.session_id}:`, e);
         if (this.cancelled) {
           throw cancelledError;
         }
-        let curr_token_comsumption = row.nb_tokens + 1;
-        if (curr_total_tokens + curr_token_comsumption > config.generation_token_limit) {
-          // Delete this and all subsequent rows
-          msg_hist.splice(i, msg_hist.length - i);
-          break;
-        }
-        curr_total_tokens += curr_token_comsumption;
+        curr_total_tokens += row.nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD; // Some overhead for message separators
         await ensureMsgRowHasEmbedding(row, embedding_model, db, this.abort_controller.signal);
-        if (this.cancelled) {
-          throw cancelledError;
-        }
       }
       if (this.cancelled) {
         throw cancelledError;
       }
 
-      if (msg_hist.length == 0) {
-        throw new UnrecoverableGenerationError("No message history");
+      match_res = await matchDialogue(msg_hist_full, this.abort_controller.signal, db);
+      if (this.cancelled) {
+        throw cancelledError;
       }
-      msg_hist.reverse();
 
-      match_res = await matchDialogue(msg_hist, this.abort_controller.signal, db);
+      if (match_res.direct_result) {
+        return;
+      } else {
+        for (let phrasing_id of match_res.matched_phrasings) {
+          curr_total_tokens += 1; // \n\n Overhead
+          // TODO
+          throw new UnrecoverableGenerationError("Unimplemented");
+        }
+        if (sample_texts.length == 0) {
+          sample_texts.push(PROMPT_SAMPLE_NO_CONTENT);
+          if (this.cancelled) {
+            throw cancelledError;
+          }
+          curr_total_tokens += await countTokens(generation_model, PROMPT_SAMPLE_NO_CONTENT);
+        }
+      }
     });
 
-    let sample_texts = [];
-    if (match_res.direct_result) {
-      // TODO
-      throw new UnrecoverableGenerationError("Unimplemented");
-    }
-    for (let phrasing_id of match_res.matched_phrasings) {
-      curr_total_tokens += 1; // Overhead
-      // TODO
-      throw new UnrecoverableGenerationError("Unimplemented");
-    }
-    if (sample_texts.length == 0) {
-      sample_texts.push(PROMPT_SAMPLE_NO_CONTENT);
-      curr_total_tokens += await countTokens(generation_model, PROMPT_SAMPLE_NO_CONTENT);
-    }
-    // TODO: do stuff with match_res
     if (this.cancelled) {
       throw cancelledError;
     }
 
-    if (!config.prompt_template.includes(PROMPT_SAMPLE_REPLACEMENT_TEXT)) {
-      throw new UnrecoverableGenerationError("Prompt template does not contain replacement text");
-    }
-    let prompt = config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, sample_texts.join("\n\n"));
-
-    while (curr_total_tokens > config.generation_token_limit) {
-      let last_msg = msg_hist.pop();
-      if (!last_msg) {
-        throw new UnrecoverableGenerationError("No message history");
+    if (match_res.direct_result) {
+      throw new UnrecoverableGenerationError("Unimplemented");
+    } else {
+      if (!config.prompt_template.includes(PROMPT_SAMPLE_REPLACEMENT_TEXT)) {
+        throw new UnrecoverableGenerationError("Prompt template does not contain replacement text");
       }
-      curr_total_tokens -= last_msg.nb_tokens + 1;
-    }
+      let prompt = config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, sample_texts.join("\n\n"));
 
-    throw new UnrecoverableGenerationError("TODO");
+      let msg_hist_model_input = msg_hist_full.slice();
+
+      while (curr_total_tokens > max_prompt_tokens && msg_hist_model_input.length > 1) {
+        let last_msg = msg_hist_model_input.pop();
+        curr_total_tokens -= last_msg.nb_tokens + 1;
+      }
+
+      let max_tokens = config.generation_total_token_limit - curr_total_tokens;
+      if (max_tokens < config.generation_reserve_token_count) {
+        console.warn(`Not enough tokens left for generation: ${max_tokens} <= ${config.generation_reserve_token_count}
+Bumping max_tokens to ${config.generation_reserve_token_count}
+This usually indicates a limit that is too small compared to the length of the samples given.`);
+        max_tokens = config.generation_reserve_token_count;
+      } else {
+        max_tokens = config.generation_reserve_token_count;
+      }
+
+      let input: ChatCompletionParams = {
+        model: generation_model,
+        messages: [{
+          role: "system",
+          content: prompt,
+        }],
+        max_tokens
+      };
+
+      msg_hist_model_input.reverse();
+
+      let chat_input_ids = [];
+      for (let row of msg_hist_model_input) {
+        chat_input_ids.push(row.id);
+        input.messages.push({
+          role: row.msg_type == MsgType.User ? "user" : "assistant",
+          content: row.content,
+        });
+      }
+
+      let completion_res = await getChatCompletion(input, this.abort_controller.signal);
+      if (this.cancelled) {
+        throw cancelledError;
+      }
+
+      if (completion_res.role != "assistant") {
+        throw new Error(`Expected assistant role to reply - got ${completion_res.role}`);
+      }
+
+      return await withDBClient(async db => addChatMessage({
+        session_id: this.session_id,
+        msg_type: MsgType.Bot,
+        content: completion_res.content,
+        generation_model,
+        nb_tokens: completion_res.completion_tokens,
+        supress_generation: true,
+        reply_metadata: {
+          ...match_res,
+          model_chat_inputs: chat_input_ids
+        }
+      }, db));
+    }
   }
 
   private async done(error: Error | null, new_msg: NewChatMessageEvent | null) {

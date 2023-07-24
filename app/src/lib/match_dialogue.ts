@@ -15,6 +15,9 @@ export interface MatchDialogueResult {
   direct_result: boolean;
 }
 
+/**
+ * @param message_history The chat history to match against, in reverse order (most recent first)
+ */
 export async function matchDialogue(message_history: MatchDialogueChatHistoryEntry[], abort: AbortSignal, db_client?: DBClient): Promise<MatchDialogueResult> {
   // TODO: Implement
   return {

@@ -4,7 +4,7 @@ import * as mq from "./messages";
 import * as path from "path";
 import { readFileSync } from "fs";
 import { MsgType } from "./enums";
-import { countTokens } from "lib/ai/openai";
+import { countTokens } from "lib/openai";
 
 const APP_VERSION = package_json.version;
 
@@ -17,7 +17,8 @@ export interface Config {
   prompt_template: string;
   prompt_template_token_count: number;
   generation_history_limit: number;
-  generation_token_limit: number;
+  generation_total_token_limit: number;
+  generation_reserve_token_count: number;
 }
 
 export class ConfigStore {
@@ -35,7 +36,8 @@ export class ConfigStore {
       prompt_template: DEFAULT_PROMPT_TEMPLATE,
       prompt_template_token_count: 0,
       generation_history_limit: 20,
-      generation_token_limit: 4096,
+      generation_total_token_limit: 4096,
+      generation_reserve_token_count: 100,
     };
     await this.populateDerivedFields(conf);
     return conf;
