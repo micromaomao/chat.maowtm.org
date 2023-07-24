@@ -79,7 +79,7 @@ export async function init() {
   }
 }
 
-export async function withDBClient<R, F extends (client: Client) => Promise<R>>(f: F): Promise<R> {
+export async function withDBClient<R>(f: (client: Client) => Promise<R>): Promise<R> {
   if (!pg_pool) {
     throw new Error("Database not initialized");
   }

@@ -4,6 +4,7 @@ import * as mq from "./messages";
 import * as path from "path";
 import { readFileSync } from "fs";
 import { MsgType } from "./enums";
+import { countTokens } from "lib/ai/openai";
 
 const APP_VERSION = package_json.version;
 
@@ -14,18 +15,30 @@ export interface Config {
   generation_model: string;
   init_messages: [MsgType, string][];
   prompt_template: string;
+  prompt_template_token_count: number;
+  generation_history_limit: number;
+  generation_token_limit: number;
 }
 
 export class ConfigStore {
-  static defaultConfig(): Config {
-    return {
+  static async populateDerivedFields(config: Config) {
+    config.prompt_template_token_count = await countTokens(config.generation_model, config.prompt_template);
+  }
+
+  static async defaultConfig(): Promise<Config> {
+    let conf: Config = {
       embedding_model: "text-embedding-ada-002",
       generation_model: "gpt-3.5-turbo",
       init_messages: [
         [MsgType.Bot, "Hi, nice to meet you!"],
       ],
       prompt_template: DEFAULT_PROMPT_TEMPLATE,
+      prompt_template_token_count: 0,
+      generation_history_limit: 20,
+      generation_token_limit: 4096,
     };
+    await this.populateDerivedFields(conf);
+    return conf;
   }
 
   private cached_config: Config = null;
@@ -36,7 +49,7 @@ export class ConfigStore {
     await withDBClient(async c => {
       const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
       if (rows.length == 0) {
-        const default_conf = ConfigStore.defaultConfig();
+        const default_conf = await ConfigStore.defaultConfig();
         await c.query({
           text: "insert into global_configuration (config, app_version) values ($1, $2)",
           values: [default_conf, APP_VERSION]
@@ -68,6 +81,7 @@ export class ConfigStore {
   }
 
   async updateConfig(new_config: Config) {
+    await ConfigStore.populateDerivedFields(new_config);
     this.cached_config = new_config;
     await withDBClient(async c => {
       await c.query({

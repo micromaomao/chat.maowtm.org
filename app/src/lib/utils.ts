@@ -14,3 +14,16 @@ export function nestProperties(obj: object): object {
   }
   return ret;
 }
+
+export function input2log(input: string | null | undefined): string {
+  if (input === null) {
+    return "null";
+  }
+  if (input === undefined) {
+    return "undefined";
+  }
+  if (input.length > 100) {
+    input = input.slice(0, 100) + "...";
+  }
+  return JSON.stringify(input);
+}

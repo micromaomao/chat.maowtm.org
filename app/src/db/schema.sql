@@ -151,7 +151,7 @@ create table chat_reply_metadata (
   -- The above 3 fields can be empty / null if no good match
 
   -- References to chat_message
-  model_inputs text[] not null,
+  model_chat_inputs text[] not null,
 
   -- True if we bypassed the LLM due to high confidence
   direct_result boolean not null default false,

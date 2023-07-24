@@ -1,3 +1,5 @@
+import { input2log } from "lib/utils";
+
 const API_BASE = process.env.OPENAI_API_BASE;
 const API_KEY = process.env.OPENAI_API_KEY;
 
@@ -69,13 +71,6 @@ async function parseResponse(res: Response): Promise<any> {
   } else {
     return res_body;
   }
-}
-
-function input2log(input: string): string {
-  if (input.length > 100) {
-    input = input.slice(0, 100) + "...";
-  }
-  return JSON.stringify(input);
 }
 
 interface ResponseWithTokenCount<T> {

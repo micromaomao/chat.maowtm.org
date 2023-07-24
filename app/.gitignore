@@ -3,3 +3,5 @@
 .parcel-cache
 
 .env*
+
+tmp

@@ -195,7 +195,7 @@
         }
       ]
     },
-    "/chat-session/{session_id}/send_chat": {
+    "/chat-session/{session_id}/send-chat": {
       "post": {
         "summary": "Send a chat message as user",
         "description": "Authenticated with `chatToken` only to prevent admins from sending chat messages to chats which they don't own.",

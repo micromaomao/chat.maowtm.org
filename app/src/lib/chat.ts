@@ -2,13 +2,14 @@ import getConfigStore from "db/config";
 import { Client as DBClient, withDBClient } from "db/index";
 import { countTokens } from "./ai/openai";
 import * as mq from "db/messages";
-import { FetchedChatMessage, FetchedChatMessageMetadata, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
+import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
 import { MsgType } from "db/enums";
 import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token";
+import { startBackgroundGenerateResponseTask } from "./gen_response";
 
-interface FetchLastChatMessagesOptions {
+export interface FetchLastChatMessagesOptions {
   session_id: string;
   until?: string;
   limit: number;
@@ -21,7 +22,7 @@ export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions):
     return await withDBClient(db => fetchLastChatMessages({ ...opts, db_client: db }));
   }
   let db = opts.db_client;
-  let { rows } = await db.query({
+  let { rows }: { rows: any[] } = await db.query({
     name: "fetchLastChatMessages",
     text: `
       select
@@ -34,7 +35,7 @@ export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions):
       from chat_message msg
       left outer join chat_reply_metadata mtd
         on msg.id = mtd.reply_msg
-      where session = $1 and old_regenerated = false and ($3::text is null or id < $3::text)
+      where msg.session = $1 and msg.old_regenerated = false and ($3::text is null or id < $3::text)
       order by id desc
       limit $2;`,
     values: [opts.session_id, opts.limit, opts.until],
@@ -52,40 +53,62 @@ export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions):
       }
     }
   }
+  rows.reverse();
   return rows as FetchedChatMessage[];
 }
 
-interface NewChatMessage {
+export interface NewChatMessage {
   session_id: string;
   msg_type: MsgType;
   content: string;
   generation_model?: string;
   nb_tokens?: number;
   supress_generation?: boolean;
+  reply_metadata?: NewChatMessageReplyMetadata;
 }
 
-export async function addChatMessage(message: NewChatMessage, db_client: DBClient): Promise<string> {
+export interface NewChatMessageEvent extends NewChatMessage {
+  id: string;
+}
+
+export interface NewChatMessageReplyMetadata {
+  matched: string[];
+  match_scores: number[];
+  best_match_dialogue: string | null;
+  model_chat_inputs: string[];
+  direct_result: boolean;
+  regen_of?: string;
+}
+
+export async function addChatMessage(message: NewChatMessage, db_client: DBClient): Promise<NewChatMessageEvent> {
   if (message.generation_model && message.nb_tokens === undefined) {
     message.nb_tokens = await countTokens(message.generation_model, message.content);
+  }
+  if (message.msg_type == MsgType.User && message.reply_metadata) {
+    throw new Error("Invalid message - user messages cannot have reply metadata");
   }
   let { rows: [{ id }] } = await db_client.query({
     text: "insert into chat_message (session, msg_type, content, generation_model, nb_tokens) values ($1, $2, $3, $4, $5) returning id;",
     values: [message.session_id, message.msg_type, message.content, message.generation_model, message.nb_tokens]
   });
-  mq.queue.emit(message.session_id, message);
+  let mtd = message.reply_metadata;
+  if (mtd) {
+    await db_client.query({
+      text: "insert into chat_reply_metadata (reply_msg, matched, match_scores, best_match_dialogue, model_chat_inputs, direct_result, regen_of) values ($1, $2, $3, $4, $5, $6, $7);",
+      values: [
+        id, mtd.matched, mtd.match_scores, mtd.best_match_dialogue, mtd.model_chat_inputs, mtd.direct_result, mtd.regen_of
+      ]
+    });
+  }
+  let msg_evt: NewChatMessageEvent = {
+    ...message,
+    id
+  };
+  mq.queue.emit(message.session_id, msg_evt);
   if (message.msg_type == MsgType.User && !message.supress_generation) {
-    // Start off a background task to generate a response. Don't pass it the db
-    // instance because we only own it in this function.
-    generateResponseFor(message);
+    await startBackgroundGenerateResponseTask(msg_evt);
   }
   return id;
-}
-
-export async function generateResponseFor(message: NewChatMessage, db_client?: DBClient): Promise<void> {
-  if (!db_client) {
-    return await withDBClient(db => generateResponseFor(message, db));
-  }
-  throw new Error("Not implemented");
 }
 
 // export async function fetchChatMessage(message_id: string, db_client: DBClient): Promise<ChatMessage | null> {
@@ -99,15 +122,19 @@ export async function generateResponseFor(message: NewChatMessage, db_client?: D
 //   return rows[0] as ChatMessage;
 // }
 
-export async function fetchChatSession(session_id: string, db: DBClient): Promise<object | null> {
+export interface FetchedChatSession {
+  session_id: string;
+}
+
+export async function fetchChatSession(session_id: string, db: DBClient): Promise<FetchedChatSession | null> {
   let { rows } = await db.query({
-    text: "select true as exists from chat_session where session_id = $1;",
+    text: "select session_id as exists from chat_session where session_id = $1;",
     values: [session_id],
   });
   if (rows.length == 0) {
     return null;
   }
-  return rows[0];
+  return rows[0] as FetchedChatSession;
 }
 
 export async function newChatSssion(db?: DBClient): Promise<NewChatSessionResult> {
