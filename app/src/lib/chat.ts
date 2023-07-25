@@ -31,14 +31,15 @@ export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions):
         msg.content as content,
         mtd.reply_msg is not null as "metadata._exists",
         mtd.last_edit is not null as "metadata.updated_before",
-        mtd.user_feedback as "metadata.user_feedback"
+        mtd.user_feedback as "metadata.user_feedback",
+        msg.exclude_from_generation as exclude_from_generation
       from chat_message msg
       left outer join chat_reply_metadata mtd
         on msg.id = mtd.reply_msg
-      where msg.session = $1 and msg.old_regenerated = false and ($3::text is null or id < $3::text)
+      where msg.session = $1 and ($2::text is null or id < $2::text)
       order by id desc
-      limit $2;`,
-    values: [opts.session_id, opts.limit, opts.until],
+      limit $3;`,
+    values: [opts.session_id, opts.until, opts.limit],
   });
   for (let i = 0; i < rows.length; i++) {
     rows[i] = nestProperties(rows[i]);

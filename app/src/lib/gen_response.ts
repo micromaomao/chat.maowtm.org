@@ -1,5 +1,5 @@
 import { MsgType } from "db/enums";
-import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages } from "./chat"
+import { NewChatMessageEvent, addChatMessage } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
 import { input2log } from "./utils";
 import getConfigStore from "db/config";
@@ -135,7 +135,7 @@ in ${this.session_id}:`, e);
           from chat_message msg
           left outer join chat_message_embedding emb
             on msg.id = emb.msg and emb.model = $1
-          where msg.session = $2 and msg.old_regenerated = false
+          where msg.session = $2 and msg.exclude_from_generation = false
           order by id desc
           limit $3;`,
         values: [embedding_model, this.session_id, config.generation_history_limit],

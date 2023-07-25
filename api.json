@@ -568,13 +568,18 @@
             "description": "The idempotent tag provided by the client in send_chat request. Not available if too long since message creation.",
             "maxLength": 48,
             "example": "r9/dZCAekueKMhZ4bYETLMdz"
+          },
+          "exclude_from_generation": {
+            "type": "boolean",
+            "description": "True if this message will be hidden from the chat history referenced by generation code. For example this will be true if this message has been replaced by an attempted \"regenerate response\", or if this message violates the terms of use."
           }
         },
         "description": "Create or update a message.",
         "required": [
           "id",
           "msg_type",
-          "content"
+          "content",
+          "exclude_from_generation"
         ]
       },
       "BriefMessageMetadata": {
@@ -636,7 +641,8 @@
           },
           "ping": {
             "type": "string",
-            "description": "A ping message sent periodically every 5 seconds to allow the client to detect dead connections"
+            "description": "A ping message sent periodically every 5 seconds to allow the client to detect dead connections",
+            "example": "ping"
           }
         },
         "description": "A sequence of server-sent events, can be any of the following event type:"

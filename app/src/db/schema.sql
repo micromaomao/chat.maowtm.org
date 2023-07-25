@@ -49,8 +49,11 @@ create table chat_message (
 
   content text not null,
 
-  -- true if this message has been replaced by an attempted "regenerate response"
-  old_regenerated boolean not null default false,
+  -- True if this message will be hidden from the chat history referenced by
+  -- generation code.  For example this will be true if this message has been
+  -- replaced by an attempted "regenerate response", or if this message violates
+  -- the terms of use.
+  exclude_from_generation boolean not null default false,
 
   -- Name of LLM used to generate this (or, for a user message, a reply to this).
   -- This field mostly exist as a cache hint for nb_tokens.

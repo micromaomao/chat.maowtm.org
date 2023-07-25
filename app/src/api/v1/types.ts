@@ -21,6 +21,7 @@ export interface FetchedChatMessage {
   msg_type: MsgTypeStr;
   content: string;
   metadata: FetchedChatMessageMetadata;
+  exclude_from_generation: boolean;
   client_tag?: string;
 }
 
