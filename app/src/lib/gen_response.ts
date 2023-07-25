@@ -33,18 +33,21 @@ class UnrecoverableGenerationError extends Error {
   }
 }
 
-class GenerationTask {
+export class GenerationTask {
   private abort_controller: AbortController;
   private retry_count: number = 0;
   private next_retry_delay: number = GENERATION_RETRY_INITIAL_DELAY;
 
+  private generated_message_evt: NewChatMessageEvent | null = null;
+  private generated_suggestion_evt: undefined = undefined; // TODO
+
   last_message_id: string;
-  message_evt: NewChatMessageEvent;
+  src_message_evt: NewChatMessageEvent;
   session_id: string;
 
   constructor(msg_evt: NewChatMessageEvent) {
     this.last_message_id = msg_evt.id;
-    this.message_evt = msg_evt;
+    this.src_message_evt = msg_evt;
     this.session_id = msg_evt.session_id;
 
     this.abort_controller = new AbortController();
@@ -80,23 +83,27 @@ class GenerationTask {
     }
 
     try {
-      let res = await this.attempt();
+      await this.attemptReplyGeneration();
       if (this.cancelled) {
         return;
       }
-      await this.done(null, res);
+      await this.attemptSuggestionGeneration();
+      if (this.cancelled) {
+        return;
+      }
+      await this.done(null);
     } catch (e) {
       if (this.cancelled) {
         return;
       }
       console.error(`(Attempt ${this.retry_count + 1} / ${GENERATION_MAX_RETRY_COUNT + 1}) \
-Error generating reply for ${this.last_message_id} (${input2log(this.message_evt?.content)}) \
+Error generating reply for ${this.last_message_id} (${input2log(this.src_message_evt?.content)}) \
 in ${this.session_id}:`, e);
       if (e instanceof UnrecoverableGenerationError) {
         console.error("Above error is unrecoverable, not retrying.");
       }
       if (e instanceof UnrecoverableGenerationError || this.retry_count >= GENERATION_MAX_RETRY_COUNT) {
-        await this.done(e, null);
+        await this.done(e);
       } else {
         this.retry_count += 1;
         setTimeout(() => {
@@ -107,7 +114,10 @@ in ${this.session_id}:`, e);
     }
   }
 
-  private async attempt(): Promise<NewChatMessageEvent> {
+  private async attemptReplyGeneration(): Promise<void> {
+    if (this.generated_message_evt || this.cancelled) {
+      return;
+    }
     let config = (await getConfigStore()).config;
     let { generation_model, embedding_model } = config;
     const cancelledError = new Error("Cancelled");
@@ -244,34 +254,48 @@ This usually indicates a limit that is too small compared to the length of the s
         throw new Error(`Expected assistant role to reply - got ${completion_res.role}`);
       }
 
-      // TODO: parse suggestions, and add them asynchronously if there are any
+      // TODO: parse suggestions, and set this.generated_suggestion_evt if there are any
 
-      return await withDBClient(async db => addChatMessage({
-        session_id: this.session_id,
-        msg_type: MsgType.Bot,
-        content: completion_res.content,
-        generation_model,
-        nb_tokens: completion_res.completion_tokens,
-        supress_generation: true,
-        reply_metadata: {
-          ...match_res,
-          model_chat_inputs: chat_input_ids
-        }
-      }, db));
+      await withDBClient(async db => {
+        this.generated_message_evt = await addChatMessage({
+          session_id: this.session_id,
+          msg_type: MsgType.Bot,
+          content: completion_res.content,
+          generation_model,
+          nb_tokens: completion_res.completion_tokens,
+          supress_generation: true,
+          reply_metadata: {
+            ...match_res,
+            model_chat_inputs: chat_input_ids
+          }
+        }, db);
+      });
     }
   }
 
-  private async done(error: Error | null, new_msg: NewChatMessageEvent | null) {
+  private async attemptSuggestionGeneration(): Promise<void> {
+    if (this.generated_suggestion_evt || this.cancelled) {
+      return;
+    }
+    if (!this.generated_message_evt) {
+      throw new Error("Cannot generate suggestions without a generated message");
+    }
+    // TODO: Implement
+  }
+
+  private async done(error: Error | null) {
     this.removeSelfFromMap();
     if (this.cancelled) {
       return;
     }
+    let new_msg = this.generated_message_evt;
     if (!error) {
       console.log(`Generated reply for ${this.last_message_id} in ${this.session_id}:\n\
-> ${input2log(this.message_evt?.content)}\n\
+> ${input2log(this.src_message_evt?.content)}\n\
 < ${input2log(new_msg?.content)}`);
+    } else if (!new_msg) {
+      // TODO: send an error message
     }
-    // TODO
   }
 }
 
