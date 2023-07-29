@@ -14,3 +14,12 @@ class MessageQueue extends EventEmitter {
 
 export const queue = new MessageQueue();
 export const MSG_APP_CONFIG_CHANGE = "app_config_change";
+
+export enum ChatSessionEventType {
+  NewChatMessage = "new_chat_message",
+  NewSuggestions = "new_suggestions",
+}
+
+export interface ChatSessionEvent {
+  _event: ChatSessionEventType;
+}

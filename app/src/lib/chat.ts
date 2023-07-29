@@ -2,6 +2,7 @@ import getConfigStore from "db/config";
 import { Client as DBClient, withDBClient } from "db/index";
 import { countTokens } from "./openai";
 import * as mq from "db/messages";
+import { ChatSessionEvent, ChatSessionEventType } from "db/messages";
 import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
 import { MsgType } from "db/enums";
 import client_tags from "db/client_tag";
@@ -23,7 +24,7 @@ export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions):
   }
   let db = opts.db_client;
   let { rows }: { rows: any[] } = await db.query({
-    name: "fetchLastChatMessages",
+    name: "chats.ts#fetchLastChatMessages",
     text: `
       select
         msg.id as id,
@@ -69,7 +70,8 @@ export interface NewChatMessage {
   client_tag?: string;
 }
 
-export interface NewChatMessageEvent extends NewChatMessage {
+export interface NewChatMessageEvent extends NewChatMessage, ChatSessionEvent {
+  _event: ChatSessionEventType.NewChatMessage;
   id: string;
 }
 
@@ -99,6 +101,7 @@ export async function addChatMessage(message: NewChatMessage, db_client: DBClien
     });
   }
   let msg_evt: NewChatMessageEvent = {
+    _event: ChatSessionEventType.NewChatMessage,
     ...message,
     id
   };

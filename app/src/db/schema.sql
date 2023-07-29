@@ -171,6 +171,7 @@ create table chat_reply_metadata (
 );
 
 create table chat_suggestion (
+  -- id of the bot reply message this suggestion applies to
   reply_msg text not null references chat_message (id) on delete cascade,
   suggestion text not null,
 
