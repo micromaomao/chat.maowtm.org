@@ -296,13 +296,7 @@ This usually indicates a limit that is too small compared to the length of the s
           throw cancelledError;
         }
 
-        if (suggestion_extraction_res.suggestions.length > 0) {
-          this.generated_suggestion_evt = await setMessageSuggestions(
-            this.generated_message_evt.id,
-            suggestion_extraction_res.suggestions,
-            db
-          );
-        }
+        this.storeSuggestions(suggestion_extraction_res.suggestions, db);
       });
 
       if (this.cancelled) {
@@ -322,6 +316,16 @@ This usually indicates a limit that is too small compared to the length of the s
         }
       }
     }
+  }
+
+  private async storeSuggestions(generated_suggestions: string[], db?: DBClient): Promise<void> {
+    if (generated_suggestions.length > 3) {
+      generated_suggestions = generated_suggestions.slice(0, 3);
+    }
+    if (generated_suggestions.length == 0) {
+      return;
+    }
+    this.generated_suggestion_evt = await setMessageSuggestions(this.generated_message_evt.id, generated_suggestions, db);
   }
 
   private async attemptSuggestionGeneration(): Promise<void> {
@@ -345,14 +349,7 @@ This usually indicates a limit that is too small compared to the length of the s
         if (this.cancelled) {
           throw cancelledError;
         }
-
-        if (suggestion_extraction_res.suggestions.length > 0) {
-          this.generated_suggestion_evt = await setMessageSuggestions(
-            this.generated_message_evt.id,
-            suggestion_extraction_res.suggestions,
-            db
-          );
-        }
+        this.storeSuggestions(suggestion_extraction_res.suggestions, db);
       });
     }
   }

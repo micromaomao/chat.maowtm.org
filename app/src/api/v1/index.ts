@@ -9,7 +9,9 @@ import { InvalidChatSessionError, hasValidAdminAuth, requireValidChatTokenAuth, 
 import { MsgType } from "db/enums";
 import getConfigStore from "db/config";
 import * as mq from "db/messages"
+import { ChatSessionEvent, ChatSessionEventType } from "db/messages";
 import { msgTypeToStr } from "./types";
+import { NewChatSuggestionEvent, fetchSuggestions } from "lib/chat_suggestions";
 
 const apiRouter = Router();
 
@@ -49,7 +51,17 @@ apiRouter.get("/chat-session/:session_id", async (req, res) => {
     let messages = await fetchLastChatMessages({
       session_id, limit, until, db_client: db,
     });
-    let last_suggestions = undefined; // TODO
+    let last_suggestions = undefined;
+    if (messages.length > 0) {
+      let msg_id = messages[messages.length - 1].id;
+      let arr = await fetchSuggestions(msg_id);
+      if (arr.length > 0) {
+        last_suggestions = {
+          reply_msg: msg_id,
+          suggestions: arr
+        };
+      }
+    }
     return { messages, last_suggestions };
   });
   return res.status(200).json(ret);
@@ -63,25 +75,35 @@ apiRouter.get("/chat-session/:session_id/stream", async (req, res) => {
   }
 
   let closed = false;
-  async function listener(msg: NewChatMessageEvent) {
+  async function listener(_msg: ChatSessionEvent) {
     if (closed) {
       return;
     }
-    let client_msg = {
-      id: msg.id,
-      session: msg.session_id,
-      msg_type: msgTypeToStr(msg.msg_type),
-      content: msg.content,
-      client_tag: msg.client_tag || await client_tags.ulidToTag(msg.id),
-      metadata: {
-        updated_before: false,
-        user_feedback: 0
-      }
-    };
-    if (closed) {
+    let client_msg: [string, any] | null = null;
+    if (_msg._event == ChatSessionEventType.NewChatMessage) {
+      let msg = _msg as NewChatMessageEvent;
+      client_msg = ["message", {
+        id: msg.id,
+        session: msg.session_id,
+        msg_type: msgTypeToStr(msg.msg_type),
+        content: msg.content,
+        client_tag: msg.client_tag || await client_tags.ulidToTag(msg.id),
+        metadata: {
+          updated_before: false,
+          user_feedback: 0
+        }
+      }];
+    } else if (_msg._event == ChatSessionEventType.NewSuggestions) {
+      let msg = _msg as NewChatSuggestionEvent;
+      client_msg = ["suggestions", {
+        reply_msg: msg.reply_msg,
+        suggestions: msg.suggestions,
+      }];
+    }
+    if (closed || !client_msg) {
       return;
     }
-    res.write(`event: message\ndata: ${JSON.stringify(client_msg)}\n\n`);
+    res.write(`event: ${client_msg[0]}\ndata: ${JSON.stringify(client_msg[1])}\n\n`);
   }
 
   res.on("close", () => {
