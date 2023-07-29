@@ -28,6 +28,11 @@ Suggestion welcome :)`
       message_without_suggestions: "Hi"
     },
     {
+      msg: "Hi\nhi",
+      suggestions: [],
+      message_without_suggestions: "Hi\nhi"
+    },
+    {
       msg: `Hi
 
 How is your day?
@@ -37,6 +42,17 @@ Suggestion 1: Good\n\n`,
       message_without_suggestions: `Hi
 
 How is your day?`
+    },
+    {
+      msg: `Suggestion 1: How's your day?
+Suggestion 2: What are you up to?
+Suggestion 3: What are your hobbies?`,
+      suggestions: [
+        "How's your day?",
+        "What are you up to?",
+        "What are your hobbies?"
+      ],
+      message_without_suggestions: ""
     }
   ];
 

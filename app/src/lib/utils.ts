@@ -27,3 +27,7 @@ export function input2log(input: string | null | undefined): string {
   }
   return JSON.stringify(input);
 }
+
+export function asyncSleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}

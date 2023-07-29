@@ -1,10 +1,11 @@
 import { MsgType } from "db/enums";
 import { NewChatMessageEvent, addChatMessage } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
-import { input2log } from "./utils";
+import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
 import { ChatCompletionParams, countTokens, getChatCompletion, getEmbedding } from "./openai";
 import { MatchDialogueResult, matchDialogue } from "./match_dialogue";
+import { NewChatSuggestionEvent, extractSuggestions, setMessageSuggestions } from "./chat_suggestions";
 
 let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
 
@@ -27,6 +28,8 @@ const GENERATION_START_DELAY = 500;
 const GENERATION_RETRY_INITIAL_DELAY = 1000;
 const GENERATION_MAX_RETRY_COUNT = 2;
 
+const EXTRA_SUGGESTIONS_DELAY = 5000;
+
 class UnrecoverableGenerationError extends Error {
   constructor(message: string) {
     super(message);
@@ -39,7 +42,8 @@ export class GenerationTask {
   private next_retry_delay: number = GENERATION_RETRY_INITIAL_DELAY;
 
   private generated_message_evt: NewChatMessageEvent | null = null;
-  private generated_suggestion_evt: undefined = undefined; // TODO
+  private continue_completion_input: ChatCompletionParams | null = null;
+  private generated_suggestion_evt: NewChatSuggestionEvent | null = null;
 
   last_message_id: string;
   src_message_evt: NewChatMessageEvent;
@@ -87,9 +91,17 @@ export class GenerationTask {
       if (this.cancelled) {
         return;
       }
-      await this.attemptSuggestionGeneration();
-      if (this.cancelled) {
-        return;
+      if (!this.generated_suggestion_evt) {
+        if (this.retry_count == 0) {
+          await asyncSleep(EXTRA_SUGGESTIONS_DELAY);
+          if (this.cancelled) {
+            return;
+          }
+        }
+        await this.attemptSuggestionGeneration();
+        if (this.cancelled) {
+          return;
+        }
       }
       await this.done(null);
     } catch (e) {
@@ -260,13 +272,17 @@ This usually indicates a limit that is too small compared to the length of the s
         throw new Error(`Expected assistant role to reply - got ${completion_res.role}`);
       }
 
-      // TODO: parse suggestions, and set this.generated_suggestion_evt if there are any
+      let suggestion_extraction_res = extractSuggestions(completion_res.content);
 
       await withDBClient(async db => {
+        if (this.cancelled) {
+          throw cancelledError;
+        }
+
         this.generated_message_evt = await addChatMessage({
           session_id: this.session_id,
           msg_type: MsgType.Bot,
-          content: completion_res.content,
+          content: suggestion_extraction_res.message_without_suggestions,
           generation_model,
           nb_tokens: completion_res.completion_tokens,
           supress_generation: true,
@@ -275,7 +291,36 @@ This usually indicates a limit that is too small compared to the length of the s
             model_chat_inputs: chat_input_ids
           }
         }, db);
+
+        if (this.cancelled) {
+          throw cancelledError;
+        }
+
+        if (suggestion_extraction_res.suggestions.length > 0) {
+          this.generated_suggestion_evt = await setMessageSuggestions(
+            this.generated_message_evt.id,
+            suggestion_extraction_res.suggestions,
+            db
+          );
+        }
       });
+
+      if (this.cancelled) {
+        throw cancelledError;
+      }
+
+      if (suggestion_extraction_res.suggestions.length == 0) {
+        this.continue_completion_input = input;
+        input.messages.push({
+          role: "assistant",
+          content: completion_res.content,
+        });
+        let curr_total_tokens = completion_res.total_tokens;
+        while (input.messages.length > 1 && curr_total_tokens > max_prompt_tokens) {
+          let first_msg = input.messages.shift();
+          curr_total_tokens -= await countTokens(generation_model, first_msg.content);
+        }
+      }
     }
   }
 
@@ -286,7 +331,30 @@ This usually indicates a limit that is too small compared to the length of the s
     if (!this.generated_message_evt) {
       throw new Error("Cannot generate suggestions without a generated message");
     }
-    // TODO: Implement
+    const cancelledError = new Error("Cancelled");
+
+    if (this.continue_completion_input) {
+      let completion_res = await getChatCompletion(this.continue_completion_input, this.abort_controller.signal);
+      if (this.cancelled) {
+        throw cancelledError;
+      }
+
+      let suggestion_extraction_res = extractSuggestions(completion_res.content);
+
+      await withDBClient(async db => {
+        if (this.cancelled) {
+          throw cancelledError;
+        }
+
+        if (suggestion_extraction_res.suggestions.length > 0) {
+          this.generated_suggestion_evt = await setMessageSuggestions(
+            this.generated_message_evt.id,
+            suggestion_extraction_res.suggestions,
+            db
+          );
+        }
+      });
+    }
   }
 
   private async done(error: Error | null) {

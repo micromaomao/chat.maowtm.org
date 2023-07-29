@@ -37,7 +37,7 @@ export class ConfigStore {
       prompt_template_token_count: 0,
       generation_history_limit: 20,
       generation_total_token_limit: 4096,
-      generation_reserve_token_count: 100,
+      generation_reserve_token_count: 255,
     };
     await this.populateDerivedFields(conf);
     return conf;
