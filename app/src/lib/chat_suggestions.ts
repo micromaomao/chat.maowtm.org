@@ -63,12 +63,18 @@ interface ExtractSuggestionsRes {
 }
 
 export function extractSuggestions(message: string): ExtractSuggestionsRes {
-  let suggestions_list_regex = /^suggestion( \d+)?:[^\n]+$/igm;
-  let matches = message.match(suggestions_list_regex);
-  let message_without_suggestions = message.replace(suggestions_list_regex, "").trim();
-  let suggestions = matches ? matches.map(m => m.replace(/^suggestion( \d+)?:/i, "").trim()) : [];
+  let suggestions_list_regex = /(?<=^|\n|[.!?] )suggestion \d+:[\n ]*([^\n]+)(?=$|\n)/ig;
+  let suggestions = [];
+  let message_without_suggestions = message;
+  let match;
+  while ((match = suggestions_list_regex.exec(message)) !== null) {
+    if (suggestions.length == 0) {
+      message_without_suggestions = message.substring(0, match.index);
+    }
+    suggestions.push(match[1].trim());
+  }
   return {
     suggestions,
-    message_without_suggestions
+    message_without_suggestions: message_without_suggestions.trim(),
   };
 }

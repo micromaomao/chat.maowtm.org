@@ -136,7 +136,7 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
     res.status(200).type("text").send(tag_entry.response);
     return;
   }
-  const config = (await getConfigStore()).config;
+  let conf_store = await getConfigStore();
   let msg = await withDBClient(async db => {
     await requireValidChatTokenAuth(req, session_id, db);
     const content = req.body.message;
@@ -147,7 +147,7 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
       session_id,
       msg_type: MsgType.User,
       content,
-      generation_model: config.generation_model,
+      generation_model: conf_store.generation_model.model_name,
       client_tag,
     }, db);
   });

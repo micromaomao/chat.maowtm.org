@@ -1,6 +1,5 @@
 import getConfigStore from "db/config";
 import { Client as DBClient, withDBClient } from "db/index";
-import { countTokens } from "./openai";
 import * as mq from "db/messages";
 import { ChatSessionEvent, ChatSessionEventType } from "db/messages";
 import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
@@ -81,8 +80,9 @@ export interface NewChatMessageReplyMetadata extends MatchDialogueResult {
 }
 
 export async function addChatMessage(message: NewChatMessage, db_client: DBClient): Promise<NewChatMessageEvent> {
-  if (message.generation_model && message.nb_tokens === undefined) {
-    message.nb_tokens = await countTokens(message.generation_model, message.content);
+  let conf = await getConfigStore();
+  if (message.generation_model && message.nb_tokens === undefined && message.generation_model == conf.generation_model.model_name) {
+    message.nb_tokens = await conf.generation_model.countTokens(message.content, { session_id: message.session_id });
   }
   if (message.msg_type == MsgType.User && message.reply_metadata) {
     throw new Error("Invalid message - user messages cannot have reply metadata");
@@ -112,17 +112,6 @@ export async function addChatMessage(message: NewChatMessage, db_client: DBClien
   return msg_evt;
 }
 
-// export async function fetchChatMessage(message_id: string, db_client: DBClient): Promise<ChatMessage | null> {
-//   let { rows } = await db_client.query({
-//     text: "select id, session as session_id, msg_type, content, generation_model, nb_tokens from chat_message where id = $1;",
-//     values: [message_id],
-//   });
-//   if (rows.length == 0) {
-//     return null;
-//   }
-//   return rows[0] as ChatMessage;
-// }
-
 export interface FetchedChatSession {
   session_id: string;
 }
@@ -142,17 +131,17 @@ export async function newChatSssion(db?: DBClient): Promise<NewChatSessionResult
   if (!db) {
     return await withDBClient(db => newChatSssion(db));
   }
-  const config = (await getConfigStore()).config;
+  const conf_store = await getConfigStore();
   const [token_str, token_buf] = await generateToken();
   const res = await db.query({
     text: "insert into chat_session (session_token) values ($1) returning session_id;",
     values: [token_buf],
   });
   let session_id = res.rows[0].session_id;
-  let init_messages = config.init_messages;
+  let init_messages = conf_store.config.init_messages;
   for (let [msg_type, content] of init_messages) {
     await addChatMessage({
-      session_id, msg_type, content, generation_model: config.generation_model, supress_generation: true,
+      session_id, msg_type, content, generation_model: conf_store.generation_model.model_name, supress_generation: true,
     }, db);
   }
   return {

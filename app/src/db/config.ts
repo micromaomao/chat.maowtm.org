@@ -4,42 +4,56 @@ import * as mq from "./messages";
 import * as path from "path";
 import { readFileSync } from "fs";
 import { MsgType } from "./enums";
-import { countTokens } from "lib/openai";
+import { LLMBase } from "lib/llm/base";
+import { chatCompletionModelFromConfig, embeddingModelFromConfig } from "lib/llm/config";
 
 const APP_VERSION = package_json.version;
 
 const DEFAULT_PROMPT_TEMPLATE = readFileSync(path.join(__dirname, "default_prompt_template.txt"), "utf-8");
 
+export interface Model {
+  type: string;
+  name: string;
+  config: object;
+}
+
+export interface GenerationModel extends Model {
+  total_token_limit: number;
+  history_limit: number;
+  reserve_token_count: number;
+}
+
 export interface Config {
-  embedding_model: string;
-  generation_model: string;
+  embedding_model: Model;
+  generation_model: GenerationModel;
   init_messages: [MsgType, string][];
   prompt_template: string;
-  prompt_template_token_count: number;
-  generation_history_limit: number;
-  generation_total_token_limit: number;
-  generation_reserve_token_count: number;
 }
 
 export class ConfigStore {
-  static async populateDerivedFields(config: Config) {
-    config.prompt_template_token_count = await countTokens(config.generation_model, config.prompt_template);
-  }
-
   static async defaultConfig(): Promise<Config> {
     let conf: Config = {
-      embedding_model: "text-embedding-ada-002",
-      generation_model: "gpt-3.5-turbo",
+      embedding_model: {
+        type: "openai",
+        name: "text-embedding-ada-002",
+        config: {}
+      },
+      generation_model: {
+        type: "openai",
+        name: "gpt-3.5-turbo",
+        config: {
+          temperature: 0.5,
+          top_p: 1
+        },
+        history_limit: 20,
+        total_token_limit: 4096,
+        reserve_token_count: 255,
+      },
       init_messages: [
         [MsgType.Bot, "Hi, nice to meet you!"],
       ],
       prompt_template: DEFAULT_PROMPT_TEMPLATE,
-      prompt_template_token_count: 0,
-      generation_history_limit: 20,
-      generation_total_token_limit: 4096,
-      generation_reserve_token_count: 255,
     };
-    await this.populateDerivedFields(conf);
     return conf;
   }
 
@@ -83,7 +97,6 @@ export class ConfigStore {
   }
 
   async updateConfig(new_config: Config) {
-    await ConfigStore.populateDerivedFields(new_config);
     this.cached_config = new_config;
     await withDBClient(async c => {
       await c.query({
@@ -92,6 +105,14 @@ export class ConfigStore {
       });
     });
     mq.queue.emit(mq.MSG_APP_CONFIG_CHANGE, new_config);
+  }
+
+  get generation_model(): LLMBase {
+    return chatCompletionModelFromConfig(this.config.generation_model);
+  }
+
+  get embedding_model(): LLMBase {
+    return embeddingModelFromConfig(this.config.embedding_model);
   }
 }
 

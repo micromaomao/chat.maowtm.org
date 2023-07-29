@@ -1,6 +1,6 @@
 import { dot, norm } from "lib/vectools";
 import getConfigStore from "db/config";
-import { getEmbedding } from "lib/openai";
+import { OpenAIEmbeddingModel } from "lib/llm/openai";
 import Router from "lib/promise_router";
 import { requireAdminAuth } from "../basic";
 
@@ -10,18 +10,19 @@ apiRouter.use(requireAdminAuth);
 
 apiRouter.get("/debug-embeddings", async (req, res) => {
   const params = req.query as any;
-  const model = params.model;
+  const model_name = params.model;
   let inputs = params.input;
   if (typeof inputs === "string") {
     inputs = [inputs];
   }
   let total_tokens = 0;
   const abortController = new AbortController();
+  let model = new OpenAIEmbeddingModel(model_name);
   try {
     const embeddings = await Promise.all(inputs.map(async input => {
-      const res = await getEmbedding({ model }, input, abortController.signal);
-      total_tokens += res.token_count;
-      return res.result;
+      const res = await model.getEmbeddings(input, {}, abortController.signal);
+      total_tokens += res.total_tokens;
+      return res.embedding;
     }));
     const norms = embeddings.map(e => norm(e));
     const similarities = [1];

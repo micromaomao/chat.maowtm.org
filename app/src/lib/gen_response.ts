@@ -3,7 +3,7 @@ import { NewChatMessageEvent, addChatMessage } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
 import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
-import { ChatCompletionParams, countTokens, getChatCompletion, getEmbedding } from "./openai";
+import { LLMBase, LLMChatCompletionInput } from "./llm/base";
 import { MatchDialogueResult, matchDialogue } from "./match_dialogue";
 import { NewChatSuggestionEvent, extractSuggestions, setMessageSuggestions } from "./chat_suggestions";
 
@@ -42,7 +42,7 @@ export class GenerationTask {
   private next_retry_delay: number = GENERATION_RETRY_INITIAL_DELAY;
 
   private generated_message_evt: NewChatMessageEvent | null = null;
-  private continue_completion_input: ChatCompletionParams | null = null;
+  private continue_completion_input: LLMChatCompletionInput | null = null;
   private generated_suggestion_evt: NewChatSuggestionEvent | null = null;
 
   last_message_id: string;
@@ -130,12 +130,18 @@ in ${this.session_id}:`, e);
     if (this.generated_message_evt || this.cancelled) {
       return;
     }
-    let config = (await getConfigStore()).config;
-    let { generation_model, embedding_model } = config;
+    const conf_store = await getConfigStore();
+    let config = conf_store.config;
+    let generation_model = conf_store.generation_model;
+    let embedding_model = conf_store.embedding_model;
     const cancelledError = new Error("Cancelled");
 
-    let curr_total_tokens = config.prompt_template_token_count;
-    let max_prompt_tokens = config.generation_total_token_limit - config.generation_reserve_token_count;
+    let curr_total_tokens = await generation_model.countTokens(
+      config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, ""),
+      {},
+      this.abort_controller.signal
+    );
+    let max_prompt_tokens = config.generation_model.total_token_limit - config.generation_model.reserve_token_count;
     let match_res: MatchDialogueResult;
     let msg_hist_full: any[];
     let sample_texts = [];
@@ -161,7 +167,7 @@ in ${this.session_id}:`, e);
           where msg.session = $2 and msg.exclude_from_generation = false
           order by id desc
           limit $3;`,
-        values: [embedding_model, this.session_id, config.generation_history_limit],
+        values: [embedding_model.model_name, this.session_id, config.generation_model.history_limit],
       })).rows;
       if (this.cancelled) {
         throw cancelledError;
@@ -208,7 +214,7 @@ in ${this.session_id}:`, e);
           if (this.cancelled) {
             throw cancelledError;
           }
-          curr_total_tokens += await countTokens(generation_model, PROMPT_SAMPLE_NO_CONTENT);
+          curr_total_tokens += await generation_model.countTokens(PROMPT_SAMPLE_NO_CONTENT, {}, this.abort_controller.signal);
         }
       }
     });
@@ -232,24 +238,9 @@ in ${this.session_id}:`, e);
         curr_total_tokens -= last_msg.nb_tokens + 1;
       }
 
-      let max_tokens = config.generation_total_token_limit - curr_total_tokens;
-      if (max_tokens < config.generation_reserve_token_count) {
-        console.warn(`Not enough tokens left for generation: ${max_tokens} <= ${config.generation_reserve_token_count}
-Bumping max_tokens to ${config.generation_reserve_token_count}
-This usually indicates a limit that is too small compared to the length of the samples given.`);
-        max_tokens = config.generation_reserve_token_count;
-      } else {
-        max_tokens = config.generation_reserve_token_count;
-      }
-
-      let input: ChatCompletionParams = {
-        model: generation_model,
-        messages: [{
-          role: "system",
-          content: prompt,
-        }],
-        max_tokens,
-        user: this.session_id,
+      let input: LLMChatCompletionInput = {
+        chat_history: [],
+        instruction_prompt: prompt,
       };
 
       msg_hist_model_input.reverse();
@@ -257,22 +248,18 @@ This usually indicates a limit that is too small compared to the length of the s
       let chat_input_ids = [];
       for (let row of msg_hist_model_input) {
         chat_input_ids.push(row.id);
-        input.messages.push({
-          role: row.msg_type == MsgType.User ? "user" : "assistant",
-          content: row.content,
+        input.chat_history.push({
+          role: row.msg_type == MsgType.User ? "user" : "bot",
+          text: row.content,
         });
       }
 
-      let completion_res = await getChatCompletion(input, this.abort_controller.signal);
+      let completion_res = await generation_model.chatCompletion(input, { session_id: this.session_id }, this.abort_controller.signal);
       if (this.cancelled) {
         throw cancelledError;
       }
 
-      if (completion_res.role != "assistant") {
-        throw new Error(`Expected assistant role to reply - got ${completion_res.role}`);
-      }
-
-      let suggestion_extraction_res = extractSuggestions(completion_res.content);
+      let suggestion_extraction_res = extractSuggestions(completion_res.text);
 
       await withDBClient(async db => {
         if (this.cancelled) {
@@ -283,7 +270,7 @@ This usually indicates a limit that is too small compared to the length of the s
           session_id: this.session_id,
           msg_type: MsgType.Bot,
           content: suggestion_extraction_res.message_without_suggestions,
-          generation_model,
+          generation_model: generation_model.model_name,
           nb_tokens: completion_res.completion_tokens,
           supress_generation: true,
           reply_metadata: {
@@ -305,14 +292,17 @@ This usually indicates a limit that is too small compared to the length of the s
 
       if (suggestion_extraction_res.suggestions.length == 0) {
         this.continue_completion_input = input;
-        input.messages.push({
-          role: "assistant",
-          content: completion_res.content,
+        input.chat_history.push({
+          role: "bot",
+          text: completion_res.text,
         });
         let curr_total_tokens = completion_res.total_tokens;
-        while (input.messages.length > 1 && curr_total_tokens > max_prompt_tokens) {
-          let first_msg = input.messages.shift();
-          curr_total_tokens -= await countTokens(generation_model, first_msg.content);
+        while (input.chat_history.length > 1 && curr_total_tokens > max_prompt_tokens) {
+          let first_msg = input.chat_history.shift();
+          curr_total_tokens -= await generation_model.countTokens(first_msg.text, { session_id: this.session_id }, this.abort_controller.signal);
+          if (this.cancelled) {
+            throw cancelledError;
+          }
         }
       }
     }
@@ -337,13 +327,19 @@ This usually indicates a limit that is too small compared to the length of the s
     }
     const cancelledError = new Error("Cancelled");
 
+    const conf_store = await getConfigStore();
+
     if (this.continue_completion_input) {
-      let completion_res = await getChatCompletion(this.continue_completion_input, this.abort_controller.signal);
+      let completion_res = await conf_store.generation_model.chatCompletion(
+        this.continue_completion_input,
+        { session_id: this.session_id },
+        this.abort_controller.signal
+      );
       if (this.cancelled) {
         throw cancelledError;
       }
 
-      let suggestion_extraction_res = extractSuggestions(completion_res.content);
+      let suggestion_extraction_res = extractSuggestions(completion_res.text);
 
       await withDBClient(async db => {
         if (this.cancelled) {
@@ -370,28 +366,33 @@ This usually indicates a limit that is too small compared to the length of the s
   }
 }
 
-export async function ensureMsgRowHasTokenCount(msg_row: any, generation_model: string, db: DBClient, abort: AbortSignal) {
-  if (msg_row.generation_model == generation_model && msg_row.nb_tokens !== null) {
+export async function ensureMsgRowHasTokenCount(msg_row: any, generation_model: LLMBase, db: DBClient, abort: AbortSignal) {
+  if (msg_row.generation_model == generation_model.model_name && msg_row.nb_tokens !== null) {
     return;
   }
-  let tokens = await countTokens(generation_model, msg_row.content);
-  msg_row.generation_model = generation_model;
+  let tokens = await generation_model.countTokens(msg_row.content, { session_id: msg_row.session_id }, abort);
+  msg_row.generation_model = generation_model.model_name;
   msg_row.nb_tokens = tokens;
   if (abort.aborted) {
     return;
   }
-  await db.query({
-    text: "update chat_message set generation_model = $1, nb_tokens = $2 where id = $3",
-    values: [generation_model, tokens, msg_row.id]
-  });
+  try {
+    await db.query({
+      text: "update chat_message set generation_model = $1, nb_tokens = $2 where id = $3",
+      values: [generation_model.model_name, tokens, msg_row.id]
+    });
+  } catch (e) {
+    console.warn(`Failed to update token count for message ${msg_row.id}`, e);
+    // Do nothing
+  }
 }
 
-export async function ensureMsgRowHasEmbedding(msg_row: any, embedding_model: string, db: DBClient, abort: AbortSignal) {
+export async function ensureMsgRowHasEmbedding(msg_row: any, embedding_model: LLMBase, db: DBClient, abort: AbortSignal) {
   if (msg_row.embedding !== null) {
     return;
   }
-  let emb_res = await getEmbedding({ model: embedding_model, user: msg_row.session_id }, msg_row.content, abort);
-  msg_row.embedding = emb_res.result;
+  let emb_res = await embedding_model.getEmbeddings(msg_row.content, { session_id: msg_row.session_id }, abort);
+  msg_row.embedding = emb_res.embedding;
   if (abort.aborted) {
     return;
   }
@@ -401,7 +402,7 @@ export async function ensureMsgRowHasEmbedding(msg_row: any, embedding_model: st
     // syntax.
     await db.query({
       text: "insert into chat_message_embedding (msg, model, embedding, nb_tokens) values ($1, $2, $3::jsonb, $4)",
-      values: [msg_row.id, embedding_model, JSON.stringify(emb_res.result), emb_res.token_count]
+      values: [msg_row.id, embedding_model.model_name, JSON.stringify(emb_res.embedding), emb_res.total_tokens]
     });
   } catch (e) {
     console.warn("Failed to insert embedding:", e);
