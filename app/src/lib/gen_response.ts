@@ -25,7 +25,7 @@ const MODEL_PER_MESSAGE_TOKEN_OVERHEAD = 2;
 const GENERATION_START_DELAY = 500;
 
 const GENERATION_RETRY_INITIAL_DELAY = 1000;
-const GENERATION_MAX_RETRY_COUNT = 1;
+const GENERATION_MAX_RETRY_COUNT = 2;
 
 class UnrecoverableGenerationError extends Error {
   constructor(message: string) {
@@ -137,6 +137,7 @@ in ${this.session_id}:`, e);
         text: `
           select
             msg.id as id,
+            session as session_id,
             msg.msg_type as msg_type,
             msg.content as content,
             msg.generation_model as generation_model,
@@ -153,9 +154,13 @@ in ${this.session_id}:`, e);
       if (this.cancelled) {
         throw cancelledError;
       }
-      if (msg_hist_full.length == 0 || msg_hist_full[0].id != this.last_message_id) {
+      if (msg_hist_full.length == 0 || msg_hist_full[0].id > this.last_message_id) {
         this.cancel();
         throw cancelledError;
+      }
+      if (msg_hist_full[0].id < this.last_message_id) {
+        // Will trigger a retry
+        throw new Error("Unable to fetch latest message.");
       }
 
       for (let row of msg_hist_full) {
@@ -183,7 +188,7 @@ in ${this.session_id}:`, e);
       } else {
         for (let phrasing_id of match_res.matched_phrasings) {
           curr_total_tokens += 1; // \n\n Overhead
-          // TODO
+          // TODO: prompt the module with this phrasing and the expected response
           throw new UnrecoverableGenerationError("Unimplemented");
         }
         if (sample_texts.length == 0) {
@@ -231,7 +236,8 @@ This usually indicates a limit that is too small compared to the length of the s
           role: "system",
           content: prompt,
         }],
-        max_tokens
+        max_tokens,
+        user: this.session_id,
       };
 
       msg_hist_model_input.reverse();
@@ -319,7 +325,7 @@ export async function ensureMsgRowHasEmbedding(msg_row: any, embedding_model: st
   if (msg_row.embedding !== null) {
     return;
   }
-  let emb_res = await getEmbedding({ model: embedding_model }, msg_row.content, abort);
+  let emb_res = await getEmbedding({ model: embedding_model, user: msg_row.session_id }, msg_row.content, abort);
   msg_row.embedding = emb_res.result;
   if (abort.aborted) {
     return;

@@ -5,6 +5,7 @@ const API_KEY = process.env.OPENAI_API_KEY;
 
 export interface EmbeddingParams {
   model: string;
+  user?: string;
 }
 
 export const KnownEmbeddingModels = [
@@ -82,7 +83,7 @@ export async function getEmbedding(params: EmbeddingParams, input: string, abort
   console.log(`OpenAI GET embeddings { model: ${params.model}, input: ${input2log(input)} }`);
   const res = await parseResponse(await fetch(new URL("embeddings", API_BASE), {
     body: JSON.stringify({
-      model: params.model,
+      ...params,
       input,
     }),
     method: "POST",
