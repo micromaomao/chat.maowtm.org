@@ -48,6 +48,9 @@ export async function init() {
   });
   pg_pool.on("connect", async client => {
     client.on("notice", msg => {
+      if (msg.message.includes("there is no transaction in progress")) {
+        return;
+      }
       console.warn("PostgreSQL notice:", msg.message);
     });
     await client.query(INIT_SQL);
@@ -84,6 +87,19 @@ export async function withDBClient<R>(f: (client: Client) => Promise<R>): Promis
     throw new Error("Database not initialized");
   }
   const client = await pg_pool.connect();
+  if (process.env.NODE_ENV == "development") {
+    let _query = client.query;
+    client.query = (...args) => {
+      let query_str;
+      if (typeof args[0] == "string") {
+        query_str = args[0];
+      } else {
+        query_str = args[0].text;
+      }
+      console.log("SQL", query_str);
+      return _query.apply(client, args);
+    };
+  }
   try {
     return await f(client);
   } finally {

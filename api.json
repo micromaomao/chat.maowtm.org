@@ -654,6 +654,7 @@
       },
       "MetadataDialoguePath": {
         "type": "array",
+        "nullable": true,
         "items": {
           "type": "object",
           "properties": {
@@ -775,6 +776,7 @@
           "parent_id": {
             "type": "string",
             "example": "01H5FZF1Y1B718D069CMYDEQJR",
+            "nullable": true,
             "description": "If creating a new child, the ID of the dialogue under which the new dialogue item will be created. If creating a new root dialogue (in a new dialogue group), this must be the json value `null`."
           },
           "phrasings": {

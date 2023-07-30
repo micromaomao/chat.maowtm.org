@@ -16,7 +16,7 @@ export async function traceDialogueItemPath(item_id: string, db: DBClient): Prom
         from dialogue_item item
           left outer join dialogue_phrasing ph
             on (ph.id = item.canonical_phrasing)
-        where item.id = $1`,
+        where item.item_id = $1`,
       values: [item_id],
     });
     if (rows.length == 0) {
@@ -33,7 +33,7 @@ export async function traceDialogueItemPath(item_id: string, db: DBClient): Prom
 
 export async function fetchDialogueItem(item_id: string, db: DBClient): Promise<FetchedDialogueItemData> {
   let { rows }: { rows: any[] } = await db.query({
-    text: "select response from dialogue_item where id = $1",
+    text: "select response from dialogue_item where item_id = $1",
     values: [item_id],
   });
   if (rows.length == 0) {
@@ -83,7 +83,7 @@ export async function updateItemPhrasings(item_id: string, new_phrasings: string
     text: `
       select
         ph.id as id,
-        q_text as text
+        q_text as text,
         emb.phrasing is not null as has_embedding
       from dialogue_phrasing ph
         left outer join dialogue_phrasing_embedding emb
@@ -203,10 +203,10 @@ export async function newDialogueItem(data: DialogueItemInput, parent_id: string
 export async function _editMsgCommitEditLog(message_id: string, edited_item_id: string, db: DBClient): Promise<void> {
   const { rows: [{ id: edit_log_id }] } = await db.query({
     text: "insert into chat_reply_edit_log (reply_msg, edited_dialogue_item) values ($1, $2) returning id",
-    value: [message_id, edited_item_id]
+    values: [message_id, edited_item_id]
   });
   await db.query({
-    text: "update chat_reply_metadata where reply_msg = $1 set last_edit = $2",
+    text: "update chat_reply_metadata set last_edit = $2 where reply_msg = $1",
     values: [message_id, edit_log_id]
   });
 }
