@@ -53,6 +53,19 @@ export async function init() {
       }
       console.warn("PostgreSQL notice:", msg.message);
     });
+    if (process.env.NODE_ENV == "development") {
+      let _query = client.query;
+      client.query = (...args) => {
+        let query_str;
+        if (typeof args[0] == "string") {
+          query_str = args[0];
+        } else {
+          query_str = args[0].text;
+        }
+        console.log("SQL", query_str);
+        return _query.apply(client, args);
+      };
+    }
     await client.query(INIT_SQL);
   });
 
@@ -87,19 +100,6 @@ export async function withDBClient<R>(f: (client: Client) => Promise<R>): Promis
     throw new Error("Database not initialized");
   }
   const client = await pg_pool.connect();
-  if (process.env.NODE_ENV == "development") {
-    let _query = client.query;
-    client.query = (...args) => {
-      let query_str;
-      if (typeof args[0] == "string") {
-        query_str = args[0];
-      } else {
-        query_str = args[0].text;
-      }
-      console.log("SQL", query_str);
-      return _query.apply(client, args);
-    };
-  }
   try {
     return await f(client);
   } finally {
