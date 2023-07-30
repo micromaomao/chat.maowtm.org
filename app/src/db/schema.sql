@@ -92,7 +92,7 @@ create table dialogue_item (
   dialogue_group text not null references dialogue_group (id) on delete cascade,
 
   -- Represents a root if null
-  parent text default null references dialogue_item (id) on delete set null,
+  parent text default null references dialogue_item (item_id) on delete set null,
 
   -- References dialogue_phrasing. Determine which phrasing is shown in the editing UI, does not affect generation.
   canonical_phrasing text default null,
@@ -108,7 +108,7 @@ create table dialogue_item (
 -- the item is the max score across all phrasings.
 create table dialogue_phrasing (
   id text not null default gen_ulid() primary key,
-  dialogue_item text not null references dialogue_item (id) on delete cascade,
+  dialogue_item text not null references dialogue_item (item_id) on delete cascade,
   q_text text not null,
 
   -- A matched "counterexample" phrasing will prevent this item from being
@@ -142,7 +142,7 @@ create table chat_reply_edit_log (
   reply_msg text not null references chat_message (id) on delete cascade,
 
   -- id of the dialogue item added or updated
-  edited_dialogue_item text not null references dialogue_item (id) on delete cascade
+  edited_dialogue_item text not null references dialogue_item (item_id) on delete cascade
 );
 
 -- Metadata for generated reply messages for future analytics.
@@ -157,7 +157,7 @@ create table chat_reply_metadata (
   -- This field is technically redundant if we never delete any phrasings, but
   -- it's here in case we deleted the phrasing but not the dialogue item.
   -- Editing UI uses this directly rather than inspecting matched_phrasings.
-  best_match_dialogue text default null references dialogue_item (id) on delete set null,
+  best_match_dialogue text default null references dialogue_item (item_id) on delete set null,
 
   -- The above 3 fields can be empty / null if no good match
 

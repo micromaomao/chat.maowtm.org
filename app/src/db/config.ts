@@ -45,7 +45,7 @@ export class ConfigStore {
           temperature: 0.5,
           top_p: 1
         },
-        history_limit: 20,
+        history_limit: 30,
         total_token_limit: 4096,
         reserve_token_count: 255,
       },

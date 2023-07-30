@@ -274,6 +274,7 @@ export async function tracePrevReplyMsgDialoguePath(message_id: string, db: DBCl
           select session from chat_message where id = $1
         ) and
         msg.msg_type = ${MsgType.Bot} and
+        msg.exclude_from_generation = false and
         msg.id < $1
       order by msg_id desc
       limit 1`,
