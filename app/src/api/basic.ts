@@ -72,3 +72,9 @@ export async function requireValidChatTokenOrAdmin(req, session_id: string, db?:
   }
   return session;
 }
+
+export class APIValidationError extends APIError {
+  constructor(message: string) {
+    super(400, message);
+  }
+}

@@ -2,7 +2,10 @@ import { dot, norm } from "lib/vectools";
 import getConfigStore from "db/config";
 import { OpenAIEmbeddingModel } from "lib/llm/openai";
 import Router from "lib/promise_router";
-import { requireAdminAuth } from "../basic";
+import { APIError, APIValidationError, requireAdminAuth } from "../basic";
+import client_tags from "db/client_tag";
+import { withDBClient, Client as DBClient } from "db/index";
+import { MsgType } from "db/enums";
 
 const apiRouter = Router();
 
@@ -47,6 +50,51 @@ apiRouter.put("/global-config", async (req, res) => {
   const config_store = await getConfigStore();
   const new_config = req.body;
   await config_store.updateConfig(new_config);
+  res.status(204).send();
+});
+
+export async function checkMessageValidForEdit(message_id: string, db: DBClient): Promise<void> {
+  let { rows }: { rows: any[] } = await db.query({
+    text: "select msg_type from chat_message where id = $1",
+    values: [message_id],
+  });
+  if (rows.length == 0) {
+    throw new APIError(404, "Message not found");
+  }
+  if (rows[0].msg_type != MsgType.Bot) {
+    throw new APIError(400, "Message is not a bot message");
+  }
+}
+
+apiRouter.get("/messages/:msg_id/inspect-last-edit", async (req, res) => {
+  const message_id = req.params.msg_id;
+  await withDBClient(async db => {
+    checkMessageValidForEdit(message_id, db);
+    throw new APIError(501, "Not implemented");
+  });
+});
+
+apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {
+  const client_tag = req.body.client_tag;
+  const tag_entry = await client_tags.checkTag(client_tag);
+  if (tag_entry) {
+    res.status(204).send();
+  }
+  const message_id = req.params.msg_id;
+  const update_item_id = req.body.item_id;
+  const insert_parent_id = req.body.parent_id;
+  const has_insert = insert_parent_id !== undefined;
+  if (update_item_id && has_insert) {
+    throw new APIValidationError("Only one of item_id and parent_id can be specified");
+  }
+  if (!update_item_id && !has_insert) {
+    throw new APIValidationError("Either item_id or parent_id (can be null) must be specified");
+  }
+  await withDBClient(async db => {
+    checkMessageValidForEdit(message_id, db);
+    throw new APIError(501, "Not implemented");
+  });
+  client_tags.setTag(client_tag, null, null);
   res.status(204).send();
 });
 

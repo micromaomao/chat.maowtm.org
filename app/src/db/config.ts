@@ -1,6 +1,6 @@
 import { withDBClient } from ".";
 import package_json from "../../package.json";
-import * as mq from "./messages";
+import * as mq from "./mq";
 import * as path from "path";
 import { readFileSync } from "fs";
 import { MsgType } from "./enums";

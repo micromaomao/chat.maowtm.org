@@ -264,6 +264,57 @@
         }
       ]
     },
+    "/messages/{msg_id}/inspect-last-edit": {
+      "get": {
+        "summary": "",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "edited": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "updated_dialogue_item": {
+                      "$ref": "#/components/schemas/FetchedDialogueItemData"
+                    },
+                    "prev_reply_path": {
+                      "$ref": "#/components/schemas/MetadataDialoguePath"
+                    }
+                  },
+                  "required": [
+                    "edited"
+                  ],
+                  "description": "If `edited` is true, `updated_dialogue_item` will exist. Otherwise, `prev_reply_path` will exist, and will be the path of the previous reply, useful for creating a new child under that."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          },
+          "404": {
+            "description": "Message not found"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      }
+    },
     "/messages/{msg_id}/edit-bot": {
       "put": {
         "summary": "Alter or create dialogue items related to a chat response",
@@ -622,7 +673,7 @@
             "canonical_phrasing_text"
           ]
         },
-        "description": "Dialogue path with the best match (if there is a sufficiently confident dialogue item match). If an earlier update is made, this will be the path which the update was made.",
+        "description": "A dialogue item's path, from root to child, including the item itself",
         "minItems": 1
       },
       "ChatSessionEventStream": {
@@ -716,15 +767,15 @@
       "EditChatRequest": {
         "type": "object",
         "properties": {
-          "dialogue_id": {
+          "item_id": {
             "type": "string",
             "example": "01H5FZF1Y1B718D069CMYDEQJR",
-            "description": "The ID of the dialogue, if updating an existing one. If this is not provided, `parent_id` must be provided instead."
+            "description": "The ID of the dialogue item, if updating an existing one. If this is not provided, `parent_id` must be provided instead."
           },
           "parent_id": {
             "type": "string",
             "example": "01H5FZF1Y1B718D069CMYDEQJR",
-            "description": "If creating a new child, the ID of the dialogue under which the new dialogue item will be created. If creating a new root dialogue, this must be the json value `null`."
+            "description": "If creating a new child, the ID of the dialogue under which the new dialogue item will be created. If creating a new root dialogue (in a new dialogue group), this must be the json value `null`."
           },
           "phrasings": {
             "type": "array",
@@ -751,7 +802,7 @@
           "phrasings",
           "reply"
         ],
-        "description": "Only one of `dialogue_id` or `parent_id` should exist."
+        "description": "Only one of `item_id` or `parent_id` should exist."
       },
       "ListChatSessionsResponse": {
         "type": "object",
@@ -803,6 +854,33 @@
         "required": [
           "sessions",
           "total"
+        ]
+      },
+      "FetchedDialogueItemData": {
+        "type": "object",
+        "properties": {
+          "phrasings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "description": "List of phrasings. First element will be the canonical one used for representing this dialogue item, and further elements are considered alternatives.",
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "reply": {
+            "type": "string"
+          },
+          "path": {
+            "$ref": "#/components/schemas/MetadataDialoguePath"
+          }
+        },
+        "required": [
+          "phrasings",
+          "reply",
+          "path"
         ]
       }
     },

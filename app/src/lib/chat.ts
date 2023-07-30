@@ -1,7 +1,7 @@
 import getConfigStore from "db/config";
 import { Client as DBClient, withDBClient } from "db/index";
-import * as mq from "db/messages";
-import { ChatSessionEvent, ChatSessionEventType } from "db/messages";
+import * as mq from "db/mq";
+import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
 import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
 import { MsgType } from "db/enums";
 import client_tags from "db/client_tag";

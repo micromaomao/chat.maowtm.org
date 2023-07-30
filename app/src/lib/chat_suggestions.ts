@@ -1,5 +1,5 @@
-import * as mq from "db/messages";
-import { ChatSessionEvent, ChatSessionEventType } from "db/messages";
+import * as mq from "db/mq";
+import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
 import { Client as DBClient, withDBClient } from "db/index";
 
 export async function fetchSuggestions(msg_id: string, db?: DBClient): Promise<string[]> {

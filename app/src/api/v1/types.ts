@@ -39,3 +39,28 @@ export interface NewChatSessionResult {
   session_id: string;
   chat_token: string;
 }
+
+export type DialoguePath = {
+  dialogue_id: string;
+  canonical_phrasing_text: string;
+}[];
+
+export interface DialogueItemInput {
+  /**
+   * First element is the canonical phrasing.
+   */
+  phrasings: string[];
+  reply: string;
+}
+
+export interface FetchedDialogueItemData extends DialogueItemInput {
+  path: DialoguePath;
+}
+
+export type InspectLastEditResult = {
+  edited: true;
+  updated_dialogue_item: FetchedDialogueItemData;
+} | {
+  edited: false;
+  prev_reply_path: DialoguePath;
+}

@@ -8,8 +8,8 @@ import { withDBClient } from "db/index";
 import { InvalidChatSessionError, hasValidAdminAuth, requireValidChatTokenAuth, requireValidChatTokenOrAdmin } from "../basic"
 import { MsgType } from "db/enums";
 import getConfigStore from "db/config";
-import * as mq from "db/messages"
-import { ChatSessionEvent, ChatSessionEventType } from "db/messages";
+import * as mq from "db/mq"
+import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
 import { msgTypeToStr } from "./types";
 import { NewChatSuggestionEvent, fetchSuggestions } from "lib/chat_suggestions";
 

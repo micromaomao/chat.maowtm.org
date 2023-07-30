@@ -34,7 +34,7 @@ create table chat_session (
   -- Required to refresh if too old, depending on server settings
   last_captcha bytea default null references captcha_challenge (challenge_token) on delete set null,
 
-  -- References to stored_dialogue. Cache for determining "ignore_for_first_match"
+  -- References to stored_dialogue_group. Cache for determining "ignore_for_first_match"
   last_matched_dialogues text[] not null default '{}'
 );
 
@@ -81,13 +81,15 @@ create table chat_message_embedding (
   primary key (msg, model)
 );
 
-create table stored_dialogue (
+-- Dialogue group - one group typically contains one root dialogue (perhaps with
+-- different phrasings)
+create table stored_dialogue_group (
   id text not null default gen_ulid() primary key
 );
 
 create table dialogue_item (
-  id text not null default gen_ulid() primary key,
-  dialogue text not null references stored_dialogue (id) on delete cascade,
+  item_id text not null default gen_ulid() primary key,
+  dialogue text not null references stored_dialogue_group (id) on delete cascade,
 
   -- Represents a root if null
   parent text default null references dialogue_item (id) on delete set null,
@@ -98,7 +100,7 @@ create table dialogue_item (
   response text not null,
 
   -- If true, user input will not match against this unless previously matched
-  -- this stored_dialogue. Useful for items like "yes" or "tell me more".
+  -- this stored_dialogue_group. Useful for items like "yes" or "tell me more".
   ignore_for_first_match boolean not null default false
 );
 
