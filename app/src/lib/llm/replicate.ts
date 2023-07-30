@@ -39,8 +39,8 @@ export class ReplicateLLAMA extends LLMBase {
 
   dialogueToPrompt(sample: ChatHistoryInput): string {
     return sample.map(msg => {
-      if (msg.role == "user") {
-        return msg.text;
+      if (msg.role == "bot") {
+        return `${msg.text}`;
       } else {
         return `[INST] ${msg.text} [/INST]`;
       }

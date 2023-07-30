@@ -63,7 +63,7 @@ interface ExtractSuggestionsRes {
 }
 
 export function extractSuggestions(message: string): ExtractSuggestionsRes {
-  let suggestions_list_regex = /(?<=^|\n|[.!?] )suggestion \d+:[\n ]*([^\n]+)(?=$|\n)/ig;
+  let suggestions_list_regex = /(?<=^|\n|[.!?] ) *suggestion \d+:[\n ]*([^\n]+)(?=$|\n)/ig;
   let suggestions = [];
   let message_without_suggestions = message;
   let match;
