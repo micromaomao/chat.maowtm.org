@@ -296,7 +296,7 @@
                   "required": [
                     "edited"
                   ],
-                  "description": "If `edited` is true, `updated_dialogue_item` will exist. Otherwise, `prev_reply_path` will exist, and will be the path of the previous reply, useful for creating a new child under that."
+                  "description": "If `edited` is true, `updated_dialogue_item` will exist. Otherwise, `prev_reply_path` will exist, and will be either `null`, or the path of the previous reply, useful for creating a new child under that."
                 }
               }
             }

@@ -62,5 +62,5 @@ export type InspectLastEditResult = {
   updated_dialogue_item: FetchedDialogueItemData;
 } | {
   edited: false;
-  prev_reply_path: DialoguePath;
+  prev_reply_path: DialoguePath | null;
 }

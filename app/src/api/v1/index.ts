@@ -143,17 +143,18 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
     // TODO: start transaction and:
     //         check rate limit
     //         check captcha
-    return await addChatMessage({
+    let msg = await addChatMessage({
       session_id,
       msg_type: MsgType.User,
       content,
       generation_model: conf_store.generation_model.model_name,
       client_tag,
     }, db);
+    let msg_id = msg.id;
+    await client_tags.setTag(client_tag, msg_id, msg_id);
+    return msg;
   });
-  let msg_id = msg.id;
-  await client_tags.setTag(client_tag, msg_id, msg_id);
-  res.status(200).type("text").send(msg_id);
+  res.status(200).type("text").send(msg.id);
 })
 
 apiRouter.use(adminRoutes);

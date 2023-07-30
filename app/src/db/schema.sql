@@ -34,7 +34,7 @@ create table chat_session (
   -- Required to refresh if too old, depending on server settings
   last_captcha bytea default null references captcha_challenge (challenge_token) on delete set null,
 
-  -- References to stored_dialogue_group. Cache for determining "ignore_for_first_match"
+  -- References to dialogue_group. Cache for determining "ignore_for_first_match"
   last_matched_dialogues text[] not null default '{}'
 );
 
@@ -83,13 +83,13 @@ create table chat_message_embedding (
 
 -- Dialogue group - one group typically contains one root dialogue (perhaps with
 -- different phrasings)
-create table stored_dialogue_group (
+create table dialogue_group (
   id text not null default gen_ulid() primary key
 );
 
 create table dialogue_item (
   item_id text not null default gen_ulid() primary key,
-  dialogue text not null references stored_dialogue_group (id) on delete cascade,
+  dialogue_group text not null references dialogue_group (id) on delete cascade,
 
   -- Represents a root if null
   parent text default null references dialogue_item (id) on delete set null,
@@ -100,7 +100,7 @@ create table dialogue_item (
   response text not null,
 
   -- If true, user input will not match against this unless previously matched
-  -- this stored_dialogue_group. Useful for items like "yes" or "tell me more".
+  -- this dialogue_group. Useful for items like "yes" or "tell me more".
   ignore_for_first_match boolean not null default false
 );
 
@@ -137,10 +137,12 @@ create table dialogue_phrasing_embedding (
 
 create table chat_reply_edit_log (
   id text not null default gen_ulid() primary key,
+
+  -- Search for this using chat_reply_metadata.last_edit
   reply_msg text not null references chat_message (id) on delete cascade,
 
   -- id of the dialogue item added or updated
-  edited_dialogue text not null references dialogue_item (id) on delete cascade
+  edited_dialogue_item text not null references dialogue_item (id) on delete cascade
 );
 
 -- Metadata for generated reply messages for future analytics.

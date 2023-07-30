@@ -4,7 +4,7 @@ drop table if exists captcha_challenge cascade;
 drop table if exists chat_session cascade;
 drop table if exists chat_message cascade;
 drop table if exists chat_message_embedding cascade;
-drop table if exists stored_dialogue_group cascade;
+drop table if exists dialogue_group cascade;
 drop table if exists dialogue_item cascade;
 drop table if exists dialogue_phrasing cascade;
 drop table if exists dialogue_phrasing_embedding cascade;

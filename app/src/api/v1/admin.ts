@@ -6,6 +6,8 @@ import { APIError, APIValidationError, requireAdminAuth } from "../basic";
 import client_tags from "db/client_tag";
 import { withDBClient, Client as DBClient } from "db/index";
 import { MsgType } from "db/enums";
+import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchMessageEditedDialogueItem, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
+import { DialogueItemInput, InspectLastEditResult } from "./types";
 
 const apiRouter = Router();
 
@@ -68,10 +70,22 @@ export async function checkMessageValidForEdit(message_id: string, db: DBClient)
 
 apiRouter.get("/messages/:msg_id/inspect-last-edit", async (req, res) => {
   const message_id = req.params.msg_id;
-  await withDBClient(async db => {
+  let ret = await withDBClient<InspectLastEditResult>(async db => {
     checkMessageValidForEdit(message_id, db);
-    throw new APIError(501, "Not implemented");
+    let maybe_dialogue_item = await fetchMessageEditedDialogueItem(message_id, db);
+    if (maybe_dialogue_item) {
+      return {
+        edited: true,
+        updated_dialogue_item: maybe_dialogue_item
+      }
+    } else {
+      return {
+        edited: false,
+        prev_reply_path: await tracePrevReplyMsgDialoguePath(message_id, db)
+      }
+    }
   });
+  res.json(ret);
 });
 
 apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {
@@ -90,11 +104,25 @@ apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {
   if (!update_item_id && !has_insert) {
     throw new APIValidationError("Either item_id or parent_id (can be null) must be specified");
   }
+  const item_data: DialogueItemInput = {
+    phrasings: req.body.phrasings,
+    reply: req.body.reply,
+  };
   await withDBClient(async db => {
-    checkMessageValidForEdit(message_id, db);
-    throw new APIError(501, "Not implemented");
+    await db.query("begin transaction isolation level serializable");
+    try {
+      checkMessageValidForEdit(message_id, db);
+      if (has_insert) {
+        await editMsgAddNewChild(message_id, insert_parent_id, item_data, db);
+      } else {
+        await editMsgUpdateDialogueItem(message_id, update_item_id, item_data, db);
+      }
+      await db.query("commit");
+      await client_tags.setTag(client_tag, null, null);
+    } finally {
+      await db.query("rollback");
+    }
   });
-  client_tags.setTag(client_tag, null, null);
   res.status(204).send();
 });
 
