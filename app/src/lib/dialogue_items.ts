@@ -2,6 +2,13 @@ import { MsgType } from "db/enums";
 import { DialogueItemInput, DialoguePath, FetchedDialogueItemData } from "../api/v1/types";
 import { Client as DBClient } from "../db/index";
 import getConfigStore from "db/config";
+import { APIError } from "../api/basic";
+
+export class DialogueItemNotFoundError extends APIError {
+  constructor(item_id: string) {
+    super(404, `Dialogue item not found: ${item_id}`);
+  }
+}
 
 export async function traceDialogueItemPath(item_id: string, db: DBClient): Promise<DialoguePath> {
   let res: DialoguePath = [];
@@ -17,17 +24,21 @@ export async function traceDialogueItemPath(item_id: string, db: DBClient): Prom
           left outer join dialogue_phrasing ph
             on (ph.id = item.canonical_phrasing)
         where item.item_id = $1`,
-      values: [item_id],
+      values: [curr_id],
     });
     if (rows.length == 0) {
-      throw new Error("Dialogue item not found");
+      throw new DialogueItemNotFoundError(curr_id);
     }
     res.push({
       dialogue_id: curr_id,
       canonical_phrasing_text: rows[0].canonical_phrasing,
     });
     curr_id = rows[0].parent_id;
+    if (res.some(x => x.dialogue_id == curr_id)) {
+      throw new Error("Dialogue item parent chain contains a cycle");
+    }
   }
+  res.reverse();
   return res;
 }
 
@@ -37,7 +48,7 @@ export async function fetchDialogueItem(item_id: string, db: DBClient): Promise<
     values: [item_id],
   });
   if (rows.length == 0) {
-    throw new Error("Dialogue item not found");
+    throw new DialogueItemNotFoundError(item_id);
   }
   let reply = rows[0].response;
   return {
@@ -128,10 +139,12 @@ export async function updateItemPhrasings(item_id: string, new_phrasings: string
     text: "update dialogue_item set canonical_phrasing = $1 where item_id = $2",
     values: [canonical_id, item_id]
   });
-  await db.query({
-    text: "delete from dialogue_phrasing where id = any($1)",
-    values: [to_remove.map(p => p.id)]
-  });
+  if (to_remove.length > 0) {
+    await db.query({
+      text: "delete from dialogue_phrasing where id = any($1)",
+      values: [to_remove.map(p => p.id)]
+    });
+  }
   for (let obj of to_embed) {
     await createPhrasingEmbedding(obj.id!, obj.text, db);
   }
@@ -143,7 +156,7 @@ export async function fetchDialogueItemPhrasings(item_id: string, db: DBClient):
     values: [item_id]
   });
   if (rows.length == 0) {
-    throw new Error("Dialogue item not found");
+    throw new DialogueItemNotFoundError(item_id);
   }
   let canonical_phrasing_id: string | null = rows[0].canonical_phrasing;
   rows = (await db.query({
@@ -165,10 +178,13 @@ export async function fetchDialogueItemPhrasings(item_id: string, db: DBClient):
 }
 
 export async function updateDialogueItem(item_id: string, data: DialogueItemInput, db: DBClient): Promise<void> {
-  await db.query({
+  let res = await db.query({
     text: "update dialogue_item set response = $1 where item_id = $2",
     values: [data.reply, item_id]
   });
+  if (res.rowCount == 0) {
+    throw new DialogueItemNotFoundError(item_id);
+  }
   await updateItemPhrasings(item_id, data.phrasings, db);
 }
 
@@ -180,7 +196,7 @@ export async function newDialogueItem(data: DialogueItemInput, parent_id: string
       values: [parent_id]
     });
     if (rows.length == 0) {
-      throw new Error("Parent item not found");
+      throw new DialogueItemNotFoundError(parent_id);
     }
     dialogue_group_id = rows[0].group_id;
   } else {
