@@ -2,14 +2,14 @@ export interface TelemetryInfo {
   session_id?: string;
 }
 
-export type ChatHistoryInput = {
+export interface ChatHistoryInputLine {
   role: "user" | "bot";
   text: string;
-}[];
+};
 
 export interface LLMChatCompletionInput {
   instruction_prompt: string;
-  chat_history: ChatHistoryInput;
+  chat_history: ChatHistoryInputLine[];
 }
 
 export interface LLMCOmpletionOutput {
@@ -39,7 +39,7 @@ export abstract class LLMBase {
   getEmbeddings(text: string, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<LLMEmbeddingOutput> {
     throw new Error("getEmbeddings not implemented");
   }
-  dialogueToPrompt(sample: ChatHistoryInput): string {
-    return sample.map(({ role, text }) => `${role == "user" ? "User" : "You"}: ${text}`).join("\n");
+  dialogueToPrompt({ role, text }: ChatHistoryInputLine): string {
+    return `${role == "user" ? "User" : "You"}: ${text}`;
   }
 }

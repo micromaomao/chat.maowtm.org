@@ -1,5 +1,5 @@
 import Replicate from "replicate"
-import { ChatHistoryInput, LLMBase, LLMCOmpletionOutput, LLMChatCompletionInput, TelemetryInfo } from "./base";
+import { ChatHistoryInputLine, LLMBase, LLMCOmpletionOutput, LLMChatCompletionInput, TelemetryInfo } from "./base";
 import { input2log } from "lib/utils";
 
 const API_KEY = process.env.REPLICATE_API_KEY;
@@ -37,18 +37,17 @@ export class ReplicateLLAMA extends LLMBase {
     return Math.ceil(text.length / 3);
   }
 
-  dialogueToPrompt(sample: ChatHistoryInput): string {
-    return sample.map(msg => {
-      if (msg.role == "bot") {
-        return `${msg.text}`;
-      } else {
-        return `[INST] ${msg.text} [/INST]`;
-      }
-    }).join("\n");
+
+  dialogueToPrompt({ role, text }: ChatHistoryInputLine): string {
+    if (role == "bot") {
+      return `${text}`;
+    } else {
+      return `[INST] ${text} [/INST]`;
+    }
   }
 
   async chatCompletion(input: LLMChatCompletionInput, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<LLMCOmpletionOutput> {
-    let prompt = this.dialogueToPrompt(input.chat_history);
+    let prompt = input.chat_history.map(l => this.dialogueToPrompt(l)).join("\n");
     console.log(`Replicate run { model: ${this.config.model_id}, prompt: ${input2log(prompt)}}`);
     const output = await replicate.run(this.config.model_id as any, {
       input: {

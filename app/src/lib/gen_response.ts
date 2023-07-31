@@ -4,7 +4,7 @@ import { Client as DBClient, withDBClient } from "db/index";
 import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
 import { LLMBase, LLMChatCompletionInput } from "./llm/base";
-import { MatchDialogueResult, matchDialogue } from "./match_dialogue";
+import { MatchDialogueResult, DialogueMatcher } from "./match_dialogue";
 import { NewChatSuggestionEvent, extractSuggestions, setMessageSuggestions } from "./chat_suggestions";
 
 let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
@@ -49,6 +49,8 @@ export class GenerationTask {
   src_message_evt: NewChatMessageEvent;
   session_id: string;
 
+  dialogue_matcher: DialogueMatcher | null = null;
+
   constructor(msg_evt: NewChatMessageEvent) {
     this.last_message_id = msg_evt.id;
     this.src_message_evt = msg_evt;
@@ -87,6 +89,14 @@ export class GenerationTask {
     }
 
     try {
+      if (!this.dialogue_matcher) {
+        this.dialogue_matcher = await withDBClient(db => DialogueMatcher.fromDatabase(db))
+        // TODO: use a global cache for this
+        if (this.cancelled) {
+          return;
+        }
+      }
+
       await this.attemptReplyGeneration();
       if (this.cancelled) {
         return;
@@ -143,8 +153,8 @@ in ${this.session_id}:`, e);
     );
     let max_prompt_tokens = config.generation_model.total_token_limit - config.generation_model.reserve_token_count;
     let match_res: MatchDialogueResult;
+    let sample_texts: string[];
     let msg_hist_full: any[];
-    let sample_texts = [];
 
     await withDBClient(async db => {
       if (this.cancelled) {
@@ -196,25 +206,29 @@ in ${this.session_id}:`, e);
         throw cancelledError;
       }
 
-      match_res = await matchDialogue(msg_hist_full, this.abort_controller.signal, db);
+      match_res = await this.dialogue_matcher.matchDialogue(
+        msg_hist_full,
+        config.generation_model.max_sample_tokens,
+        this.abort_controller.signal,
+        db
+      );
       if (this.cancelled) {
         throw cancelledError;
       }
 
-      if (match_res.direct_result) {
-        return;
-      } else {
-        for (let phrasing_id of match_res.matched_phrasings) {
-          curr_total_tokens += 1; // \n\n Overhead
-          // TODO: prompt the module with this phrasing and the expected response
-          throw new UnrecoverableGenerationError("Unimplemented");
+      sample_texts = match_res.model_sample_input.map(x => {
+        if (typeof x == "string") {
+          return x;
+        } else {
+          return generation_model.dialogueToPrompt(x);
         }
+      });
+
+      if (match_res.direct_result) {
+        throw new UnrecoverableGenerationError("Unimplemented");
+      } else {
         if (sample_texts.length == 0) {
           sample_texts.push(PROMPT_SAMPLE_NO_CONTENT);
-          if (this.cancelled) {
-            throw cancelledError;
-          }
-          curr_total_tokens += await generation_model.countTokens(PROMPT_SAMPLE_NO_CONTENT, {}, this.abort_controller.signal);
         }
       }
     });
@@ -229,7 +243,12 @@ in ${this.session_id}:`, e);
       if (!config.prompt_template.includes(PROMPT_SAMPLE_REPLACEMENT_TEXT)) {
         throw new UnrecoverableGenerationError("Prompt template does not contain replacement text");
       }
-      let prompt = config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, sample_texts.join("\n\n"));
+      let sample_text_str = sample_texts.join("\n");
+      let prompt = config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, sample_text_str);
+      curr_total_tokens += await generation_model.countTokens(sample_text_str, {}, this.abort_controller.signal);
+      if (this.cancelled) {
+        throw cancelledError;
+      }
 
       let msg_hist_model_input = msg_hist_full.slice();
 

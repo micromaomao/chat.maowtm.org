@@ -19,6 +19,7 @@ export interface Model {
 
 export interface GenerationModel extends Model {
   total_token_limit: number;
+  max_sample_tokens: number;
   history_limit: number;
   reserve_token_count: number;
 }
@@ -45,8 +46,9 @@ export class ConfigStore {
           temperature: 0.5,
           top_p: 1
         },
-        history_limit: 30,
+        history_limit: 50,
         total_token_limit: 4096,
+        max_sample_tokens: 2048,
         reserve_token_count: 255,
       },
       init_messages: [
