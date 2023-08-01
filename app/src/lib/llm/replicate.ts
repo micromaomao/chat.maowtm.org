@@ -1,6 +1,6 @@
 import Replicate from "replicate"
 import { ChatHistoryInputLine, LLMBase, LLMCOmpletionOutput, LLMChatCompletionInput, TelemetryInfo } from "./base";
-import { input2log } from "lib/utils";
+import { asyncSleep, input2log } from "lib/utils";
 
 const API_KEY = process.env.REPLICATE_API_KEY;
 
@@ -49,20 +49,48 @@ export class ReplicateLLAMA extends LLMBase {
   async chatCompletion(input: LLMChatCompletionInput, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<LLMCOmpletionOutput> {
     let prompt = input.chat_history.map(l => this.dialogueToPrompt(l)).join("\n");
     console.log(`Replicate run { model: ${this.config.model_id}, prompt: ${input2log(prompt)}}`);
-    const output = await replicate.run(this.config.model_id as any, {
+    let prediction = await replicate.predictions.create({
+      version: this.config.model_id.replace(/^[^:]+:/, ""),
       input: {
         ...this.config,
         prompt: prompt,
         system_prompt: input.instruction_prompt,
-      },
-      signal: abortSignal,
-      wait: {
-        interval: 1000,
-        max_attempts: 30,
       }
-    }) as string[];
+    });
+    function cancelPrediction() {
+      replicate.predictions.cancel(prediction.id).catch(err => {
+        console.error("Failed to cancel replicate prediction: ", err);
+      });
+    }
+    let attempts = 0;
+    try {
+      while (prediction.status == "starting" || prediction.status == "processing") {
+        attempts += 1;
+        if (abortSignal?.aborted) {
+          cancelPrediction();
+          throw new Error("aborted");
+        }
+        if (attempts > 180) {
+          cancelPrediction();
+          throw new Error("Prediction timed out");
+        }
+        await asyncSleep(1000);
+        prediction = await replicate.predictions.get(prediction.id);
+        console.info(`Replicate prediction ${prediction.id} status: ${prediction.status}`);
+      }
+    } finally {
+      if (prediction.status == "starting" || prediction.status == "processing") {
+        cancelPrediction();
+      }
+    }
+    if (prediction.status == "failed") {
+      throw new Error(`Replicate prediction failed: ${prediction.error}`);
+    }
+    if (prediction.status != "succeeded") {
+      throw new Error(`Replicate prediction status is ${prediction.status}`);
+    }
     return {
-      text: output.join(''),
+      text: prediction.output.join(''),
     };
   }
 }
