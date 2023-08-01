@@ -3,9 +3,9 @@ import { NewChatMessageEvent, addChatMessage } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
 import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
-import { LLMBase, LLMChatCompletionInput } from "./llm/base";
+import { ChatHistoryInputLine, LLMBase, LLMChatCompletionInput } from "./llm/base";
 import { MatchDialogueResult, DialogueMatcher } from "./match_dialogue";
-import { NewChatSuggestionEvent, extractSuggestions, setMessageSuggestions } from "./chat_suggestions";
+import { NewChatSuggestionEvent, extractSuggestions, fetchSuggestions, setMessageSuggestions } from "./chat_suggestions";
 
 let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
 
@@ -14,7 +14,7 @@ const PROMPT_SAMPLE_USER_PREFIX = "User: ";
 const PROMPT_SAMPLE_BOT_PREFIX = "You: ";
 const PROMPT_SAMPLE_NO_CONTENT = "(no relevant content found)";
 
-const MODEL_PER_MESSAGE_TOKEN_OVERHEAD = 2;
+const MODEL_PER_MESSAGE_TOKEN_OVERHEAD = 3;
 
 /**
  * The delay before starting the generation task.
@@ -199,7 +199,6 @@ in ${this.session_id}:`, e);
         if (this.cancelled) {
           throw cancelledError;
         }
-        curr_total_tokens += row.nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD; // Some overhead for message separators
         await ensureMsgRowHasEmbedding(row, embedding_model, db, this.abort_controller.signal);
       }
       if (this.cancelled) {
@@ -250,28 +249,45 @@ in ${this.session_id}:`, e);
         throw cancelledError;
       }
 
-      let msg_hist_model_input = msg_hist_full.slice();
-
-      while (curr_total_tokens > max_prompt_tokens && msg_hist_model_input.length > 1) {
-        let last_msg = msg_hist_model_input.pop();
-        curr_total_tokens -= last_msg.nb_tokens + 1;
-      }
-
       let input: LLMChatCompletionInput = {
         chat_history: [],
         instruction_prompt: prompt,
       };
 
-      msg_hist_model_input.reverse();
-
       let chat_input_ids = [];
-      for (let row of msg_hist_model_input) {
+      let attempted_include_suggestions = false;
+      for (let row of msg_hist_full) {
         chat_input_ids.push(row.id);
-        input.chat_history.push({
+        let input_line: ChatHistoryInputLine = {
           role: row.msg_type == MsgType.User ? "user" : "bot",
           text: row.content,
-        });
+        };
+        input.chat_history.push(input_line);
+        let new_total_tokens = curr_total_tokens + row.nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD; // Some overhead for message separators
+        if (new_total_tokens > max_prompt_tokens && input.chat_history.length > 1) {
+          break;
+        }
+        curr_total_tokens = new_total_tokens;
+
+        if (!attempted_include_suggestions && row.msg_type == MsgType.Bot) {
+          attempted_include_suggestions = true;
+          let suggestions = await fetchSuggestions(row.id);
+          if (suggestions.length > 0) {
+            let additional_text = "\n" + suggestions.map((x, i) => `Suggestion ${i + 1}: ${x}`).join("\n");
+            input_line.text += additional_text;
+            curr_total_tokens += await generation_model.countTokens(additional_text, { session_id: row.session_id }, this.abort_controller.signal);
+          }
+        }
       }
+
+      if (input.chat_history[input.chat_history.length - 1].role == "bot" && input.chat_history.length >= 2) {
+        curr_total_tokens -= msg_hist_full[input.chat_history.length - 1].nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD;;
+        input.chat_history.pop();
+        chat_input_ids.pop();
+      }
+
+      input.chat_history.reverse();
+      chat_input_ids.reverse();
 
       let completion_res = await generation_model.chatCompletion(input, { session_id: this.session_id }, this.abort_controller.signal);
       if (this.cancelled) {

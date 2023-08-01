@@ -71,7 +71,7 @@ export async function checkMessageValidForEdit(message_id: string, db: DBClient)
 apiRouter.get("/messages/:msg_id/inspect-last-edit", async (req, res) => {
   const message_id = req.params.msg_id;
   let ret = await withDBClient<InspectLastEditResult>(async db => {
-    checkMessageValidForEdit(message_id, db);
+    await checkMessageValidForEdit(message_id, db);
     let maybe_dialogue_item = await fetchMessageEditedDialogueItem(message_id, db);
     if (maybe_dialogue_item) {
       return {
@@ -111,7 +111,7 @@ apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {
   await withDBClient(async db => {
     await db.query("begin transaction isolation level serializable");
     try {
-      checkMessageValidForEdit(message_id, db);
+      await checkMessageValidForEdit(message_id, db);
       if (has_insert) {
         await editMsgAddNewChild(message_id, insert_parent_id, item_data, db);
       } else {

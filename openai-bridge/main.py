@@ -91,18 +91,20 @@ async def openai_proxy(request: Request):
     "body": json_body if json_body is not None else body,
     "res": {
       "status": res.status_code,
+      "body": []
     }
   }
-  json.dump(log_entry, log_file)
-  log_file.write("\n")
-  log_file.flush()
   exited = False
   try:
     aiter_bytes = res.aiter_bytes()
     async def res_aiter():
       nonlocal exited
       try:
+        total_size = 0
         async for chunk in aiter_bytes:
+          total_size += len(chunk)
+          if total_size < 3000:
+            log_entry["res"]["body"].append(chunk.decode("utf8", "replace"))
           yield chunk
         if not exited:
           await res_ctx.__aexit__(None, None, None)
@@ -112,6 +114,11 @@ async def openai_proxy(request: Request):
           await res_ctx.__aexit__(e.__class__, e, e.__traceback__)
           exited = True
         raise e
+      finally:
+        log_entry["res"]["body"] = "".join(log_entry["res"]["body"])
+        json.dump(log_entry, log_file)
+        log_file.write("\n")
+        log_file.flush()
     return StreamingResponse(res_aiter(), status_code=res.status_code, headers=filter_headers(res.headers))
   except Exception as e:
     if not exited:
