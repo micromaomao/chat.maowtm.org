@@ -43,6 +43,7 @@ apiRouter.get("/chat-session/:session_id", async (req, res) => {
   const session_id = req.params.session_id;
   const limit = (req.query.limit === undefined) ? 1000 : parseInt(req.query.limit as string);
   const until = req.query.until as string | undefined;
+  let has_admin = await hasValidAdminAuth(req);
   let ret = await withDBClient(async db => {
     let session = await requireValidChatTokenOrAdmin(req, session_id, db);
     if (!session) {
@@ -60,6 +61,13 @@ apiRouter.get("/chat-session/:session_id", async (req, res) => {
           reply_msg: msg_id,
           suggestions: arr
         };
+      }
+    }
+    if (!has_admin) {
+      for (let msg of messages) {
+        if (msg.metadata) {
+          msg.metadata.updated_before = false;
+        }
       }
     }
     return { messages, last_suggestions };
