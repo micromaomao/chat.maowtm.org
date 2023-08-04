@@ -114,6 +114,14 @@
               "type": "string"
             },
             "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "chat_token",
+            "description": "Chat token authentication",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -158,7 +166,16 @@
         "description": "Push any future update to the messages in a chat session via server-sent events.\n\nTo authenticate, provide either `chatToken` or `adminToken`.",
         "operationId": "",
         "tags": [],
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "chat_token",
+            "description": "Chat token authentication",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "headers": {},
@@ -201,7 +218,16 @@
         "description": "Authenticated with `chatToken` only to prevent admins from sending chat messages to chats which they don't own.",
         "operationId": "",
         "tags": [],
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "chat_token",
+            "description": "Chat token authentication",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

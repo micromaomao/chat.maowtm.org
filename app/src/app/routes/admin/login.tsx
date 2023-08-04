@@ -1,9 +1,10 @@
 import React from "react";
 import { Button, Title2 } from "@fluentui/react-components";
 import { LoaderFunction, redirect, useNavigate } from "react-router-dom";
+import { getCredentialManager } from "app/utils/credentials";
 
 const loader: LoaderFunction = async () => {
-  if (localStorage.getItem("admin-token")) {
+  if (getCredentialManager().has_admin_auth) {
     throw redirect("/admin");
   }
   return {};
@@ -12,7 +13,7 @@ const loader: LoaderFunction = async () => {
 function Component() {
   const navigate = useNavigate();
   function handleMockLogin() {
-    localStorage.setItem("admin-token", "mock");
+    getCredentialManager().admin_token = "mock";
     navigate("/admin", { replace: true });
   }
 

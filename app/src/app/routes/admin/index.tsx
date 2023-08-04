@@ -4,6 +4,7 @@ import * as classes from "./index.module.css";
 import { SharedStateProvider } from "app/utils/sharedstate";
 import { Tab, TabList, SelectTabEventHandler } from "@fluentui/react-components";
 import { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, PersonFilled } from "@fluentui/react-icons";
+import { getCredentialManager } from "app/utils/credentials";
 const HomeIcon = bundleIcon(Home24Filled, Home24Regular);
 
 const path = "/admin";
@@ -25,7 +26,7 @@ const children: RouteObject[] = [
 
 const loader: LoaderFunction = async ({ request }) => {
   const isLogin = new URL(request.url).pathname == "/admin/login";
-  if (!isLogin && !localStorage.getItem("admin-token")) {
+  if (!isLogin && !getCredentialManager().has_admin_auth) {
     throw redirect("/admin/login");
   }
   return {};
@@ -60,6 +61,10 @@ function Nav() {
         break;
       case "login":
         break;
+      case "logout":
+        getCredentialManager().admin_token = null;
+        navigate("/admin/login");
+        break;
       default:
         navigate("/admin/" + tab.value);
         break;
@@ -75,6 +80,7 @@ function Nav() {
         <>
           <Tab value="home" icon={<HomeIcon />}>Dashboard</Tab>
           <Tab value="debug" icon={<CodeRegular />}>Debug</Tab>
+          <Tab value="logout">Logout</Tab>
         </>
       )}
     </TabList>

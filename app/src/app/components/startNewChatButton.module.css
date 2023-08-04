@@ -1,0 +1,10 @@
+.error {
+  color: #d13438;
+  font-size: 16px;
+  align-items: center;
+}
+
+.error> * {
+  margin-right: 4px;
+  vertical-align: middle;
+}

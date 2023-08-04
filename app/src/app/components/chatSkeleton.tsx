@@ -2,16 +2,20 @@ import React from "react";
 import { Skeleton, SkeletonItem } from "@fluentui/react-components";
 import * as classes from "./chatSkeleton.module.css";
 
-export default function ChatSkeleton({ className }: { className?: string }) {
+export default function ChatSkeleton({ className, skipFirstBotMsg }: { className?: string, skipFirstBotMsg?: boolean }) {
   return (
     <Skeleton as="div" className={classes.content + (className ? ` ${className}` : "")}>
-      <div>
-        <SkeletonItem shape='circle' size={40} />
-      </div>
-      <div className={classes.botMsg}>
-        <SkeletonItem />
-      </div>
-      <div />
+      {skipFirstBotMsg ? (null) : (
+        <>
+          <div>
+            <SkeletonItem shape='circle' size={40} />
+          </div>
+          <div className={classes.botMsg}>
+            <SkeletonItem />
+          </div>
+          <div />
+        </>
+      )}
       <div />
       <div className={classes.userMsg}>
         <SkeletonItem style={{ width: "30%" }} />

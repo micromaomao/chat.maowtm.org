@@ -1,22 +1,14 @@
+import { ChatController } from "app/components/chatController";
 import React from "react";
 import { useLoaderData } from "react-router-dom";
 
-interface Data {
-  chatId: string
-}
-
-async function loader({ params }): Promise<Data> {
-  const { chatId } = params;
-  return {
-    chatId
-  };
+async function loader({ params }): Promise<any> {
+  return { chat_id: params.chatId };
 }
 
 function Component() {
-  const data = useLoaderData() as Data;
-  return (
-    <div>Chat {data.chatId}</div>
-  );
+  const { chat_id } = useLoaderData() as any;
+  return <ChatController chat_id={chat_id} />;
 }
 
 export { loader, Component };

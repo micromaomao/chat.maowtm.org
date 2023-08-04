@@ -1,0 +1,21 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  padding: 0 30px 15px 30px;
+  gap: 2px;
+}
+
+.textRow {
+  flex-grow: 1;
+}
+
+.sendRow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+
+.textarea {
+  width: 100%;
+}

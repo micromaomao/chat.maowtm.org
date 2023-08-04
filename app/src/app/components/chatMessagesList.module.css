@@ -1,0 +1,38 @@
+.message {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+
+.msgType_user {
+  justify-content: flex-end;
+  margin-left: 40px;
+  margin-right: 20px;
+}
+
+.msgType_bot {
+  justify-content: flex-start;
+  margin-left: 20px;
+  margin-right: 40px;
+}
+
+.msgType_user .box {
+  background-color: #9300CC;
+  color: var(--colorBrandBackgroundInverted);
+}
+
+.msgType_bot .box {
+  background-color: var(--colorNeutralBackground4);
+  color: var(--colorNeutralForeground1);
+}
+
+.box {
+  border-radius: 8px;
+  padding: 8px 15px 12px 15px;
+  flex-shrink: 1;
+  max-width: 900px;
+}
+
+.excludedMsg .box {
+  opacity: 0.5;
+}
