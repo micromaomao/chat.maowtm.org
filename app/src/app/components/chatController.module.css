@@ -41,6 +41,6 @@
   text-align: center;
 }
 
-.messageListContainerJustifyBottom *:first-child {
+.messageListContainerJustifyBottom > *:first-child {
   margin-top: auto;
 }
