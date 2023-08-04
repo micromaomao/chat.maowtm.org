@@ -12,7 +12,7 @@ export interface MatchDialogueChatHistoryEntry {
   embedding: number[];
 }
 
-export type SampleInputLine = ChatHistoryInputLine | "---" | "\n---\n";
+export type SampleInputLine = ChatHistoryInputLine | "---";
 
 export interface MatchDialogueResult {
   matched_phrasings: string[];
@@ -146,19 +146,24 @@ export class DialogueMatcher {
   /**
    * Take a (usually truncated) ranked list of items from best to worst match,
    * and construct the minimum set of dialogue trees that cover all the given
-   * items.
-   *
-   * For efficiency, this function will reverse the list passed in.
+   * items up to the token limit.
    */
-  itemsToTrees(item_matches: ItemMatchResult[]): ItemsMatchTree[] {
+  itemsToTrees(item_matches: ItemMatchResult[], token_limit: number): ItemsMatchTree[] {
     let trees: ItemsMatchTree[] = [];
     let item_id_to_treenode: Map<string, ItemsMatchTree> = new Map();
+    let total_tokens = 0;
 
-    function doNode(item: CachedDialogueItem): ItemsMatchTree {
+    function doNode(item: CachedDialogueItem): ItemsMatchTree | null {
       let existing_node = item_id_to_treenode.get(item.dialogue_item_id);
       if (existing_node) {
         return existing_node;
       }
+
+      let this_tokens = item.canonical_phrasing.q_tokens + item.response_tokens;
+      if (total_tokens + this_tokens > token_limit) {
+        return null;
+      }
+      total_tokens += this_tokens;
 
       let node: ItemsMatchTree = {
         this_item: item,
@@ -175,22 +180,48 @@ export class DialogueMatcher {
       return node;
     }
 
-    item_matches.reverse();
+    function maybeMatchNodeWithPhrasing(node: ItemsMatchTree, selected_phrasing: CachedPhrasing, score: number): boolean {
+      if (node.max_score >= score) {
+        return false;
+      }
+      let new_total_tokens = total_tokens - node.selected_phrasing.q_tokens + selected_phrasing.q_tokens;
+      if (new_total_tokens > token_limit) {
+        return false;
+      }
+      total_tokens = new_total_tokens;
+      node.max_score = score;
+      node.selected_phrasing = selected_phrasing;
+      return true;
+    }
 
-    for (let { item, best_phrasing, score } of item_matches) {
+    outer: for (let { item, best_phrasing, score } of item_matches) {
       let curr_node = doNode(item);
-      curr_node.selected_phrasing = best_phrasing;
-      curr_node.max_score = score;
-      while (curr_node.this_item.parent !== null) {
-        let parent_node = doNode(curr_node.this_item.parent);
-        parent_node.children.push(curr_node);
-        parent_node.max_score = score;
-        curr_node = parent_node;
+      if (curr_node === null) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Skipping item ${item.dialogue_item_id} and stopping due to token limit`);
+        }
+        break;
+      }
+      if (maybeMatchNodeWithPhrasing(curr_node, best_phrasing, score)) {
+        while (curr_node.this_item.parent !== null) {
+          let parent_node = doNode(curr_node.this_item.parent);
+          if (parent_node === null) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`Skipping item ${curr_node.this_item.parent.dialogue_item_id} and stopping due to token limit`);
+            }
+            break outer;
+          }
+          if (!parent_node.children.includes(curr_node)) {
+            parent_node.children.push(curr_node);
+          }
+          parent_node.max_score = Math.max(parent_node.max_score, score);
+          curr_node = parent_node;
+        }
       }
     }
 
     for (let node of item_id_to_treenode.values()) {
-      node.children.reverse();
+      node.children.sort((a, b) => b.max_score - a.max_score);
     }
 
     trees.sort((a, b) => b.max_score - a.max_score);
@@ -252,9 +283,7 @@ export class DialogueMatcher {
       }
     }
 
-    // TODO: truncate item_matches based on sample_token_limit
-
-    let trees = this.itemsToTrees(item_matches);
+    let trees = this.itemsToTrees(item_matches, sample_token_limit);
     let model_input: SampleInputLine[] = [];
 
     async function dfs(node: ItemsMatchTree) {
@@ -282,7 +311,7 @@ export class DialogueMatcher {
     let first = true;
     for (let tree of trees) {
       if (!first) {
-        model_input.push("\n---\n");
+        model_input.push("---");
       }
       first = false;
       await dfs(tree);
@@ -302,7 +331,7 @@ export class DialogueMatcher {
     return {
       matched_phrasings: batch_sim.ranked_phrasings.slice(0, 5).map(ph => ph.phrasing_id),
       match_scores: [...batch_sim.scores.subarray(0, 5)],
-      best_match_dialogue: item_matches.length > 0 ? item_matches[item_matches.length - 1].item.dialogue_item_id : null,
+      best_match_dialogue: item_matches.length > 0 ? item_matches[0].item.dialogue_item_id : null,
       direct_result: false,
       model_sample_input: model_input,
     }
