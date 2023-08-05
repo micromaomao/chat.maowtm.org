@@ -10,6 +10,7 @@ import { useAutoScrollUpdateSignal } from "./autoScroll";
 interface MessageComponentProps {
   message: Message;
   handle_edit?: () => void;
+  editing?: boolean;
 };
 
 export interface PhantomMessage {
@@ -24,10 +25,10 @@ export interface Props {
   enable_buttons: boolean;
 }
 
-export function MessageComponent({ message, handle_edit }: MessageComponentProps) {
+export function MessageComponent({ message, handle_edit, editing }: MessageComponentProps) {
   const box = (
     <div className={classes.box}>
-      <Text weight={message.msg_type == "user" ? "semibold" : "regular"} size={400} strikethrough={message.exclude_from_generation}>{message.content}</Text>
+      <Text weight={message.msg_type == "user" ? "semibold" : "regular"} size={400} strikethrough={message.exclude_from_generation} style={{ whiteSpace: "pre-wrap" }}>{message.content}</Text>
     </div>
   );
   const buttons = (
@@ -46,7 +47,8 @@ export function MessageComponent({ message, handle_edit }: MessageComponentProps
   return (
     <div className={
       classes.message + " " + classes[`msgType_${message.msg_type}`] +
-      (message.exclude_from_generation ? ` ${classes.excludedMsg}` : "")
+      (message.exclude_from_generation ? ` ${classes.excludedMsg}` : "") +
+      (editing ? ` ${classes.editingMsg}` : "")
     }>
       {message.msg_type === "user" ? buttons : box}
       {message.msg_type === "user" ? box : buttons}
@@ -57,7 +59,7 @@ export function MessageComponent({ message, handle_edit }: MessageComponentProps
 export function PhantomMessageComponent({ message, onRetry }: { message: PhantomMessage, onRetry: (msg: PhantomMessage) => void }) {
   const box = (
     <div className={classes.box}>
-      <Text weight={message.msg_type == "user" ? "semibold" : "regular"} size={400}>{message.content}</Text>
+      <Text weight={message.msg_type == "user" ? "semibold" : "regular"} size={400} style={{ whiteSpace: "pre-wrap" }}>{message.content}</Text>
     </div>
   );
   const buttons = (
@@ -84,7 +86,7 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
   const autoScrollUpdate = useAutoScrollUpdateSignal();
   return (
     <>
-      {messages_list.map((message) => {
+      {messages_list.map((message, i) => {
         const handleEdit = () => {
           setEditingMsg(message.id);
           autoScrollUpdate();
@@ -93,11 +95,21 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
           setEditingMsg(null);
           autoScrollUpdate();
         };
+        let lastUserMessage = null;
+        const editingCurrMsg = editingMsg === message.id;
+        if (editingCurrMsg && i > 0) {
+          for (let j = i - 1; j >= 0; j--) {
+            if (messages_list[j].msg_type == MessageType.USER) {
+              lastUserMessage = messages_list[j];
+              break;
+            }
+          }
+        }
         return (
           <>
-            <MessageComponent key={message.id} message={message} handle_edit={enable_buttons ? handleEdit : undefined} />
-            {editingMsg === message.id ? (
-              <MessageEditComponent message_id={message.id} onClose={handleClose} />
+            <MessageComponent key={message.id} message={message} handle_edit={enable_buttons ? handleEdit : undefined} editing={editingCurrMsg} />
+            {editingCurrMsg ? (
+              <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} key={`edit ${message.id}`} />
             ) : null}
           </>
         );

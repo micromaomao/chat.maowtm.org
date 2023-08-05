@@ -32,6 +32,7 @@
   flex-shrink: 1;
   max-width: 900px;
   line-height: 1;
+  white-space: pre-wrap;
 }
 
 .excludedMsg .box {
@@ -44,4 +45,8 @@
   flex-wrap: nowrap;
   justify-content: center;
   padding: 0 5px;
+}
+.editingMsg .box {
+  border: 3px solid var(--colorBrandBackground2);
+  opacity: 1;
 }

@@ -2,23 +2,24 @@ import React, { useEffect, useState } from "react";
 import * as classes from "./messageEdit.module.css";
 import { Button, Skeleton, SkeletonItem, Subtitle1 } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
-import { AdminService, InspectLastEditResult } from "app/openapi";
+import { AdminService, InspectLastEditResult, Message } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
 
 interface P {
-  message_id: string;
+  message: Message;
+  userMessage?: Message;
   onClose: () => void;
 }
 
-export default function MessageEditComponent({ message_id, onClose }: P) {
+export default function MessageEditComponent({ message, userMessage, onClose }: P) {
   const [inspectionData, setInspectionData] = useState<InspectLastEditResult>(null)
   const [error, setError] = useState(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
 
   async function fetchInspectionData() {
     try {
-      setInspectionData(await AdminService.getMessagesInspectLastEdit(message_id));
+      setInspectionData(await AdminService.getMessagesInspectLastEdit(message.id));
       autoScrollUpdate();
     } catch (e) {
       setError(e);

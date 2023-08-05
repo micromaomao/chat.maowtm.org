@@ -3,6 +3,7 @@ import React from 'react';
 import * as classes from './messageInputBox.module.css';
 import { SendFilled } from '@fluentui/react-icons';
 import { useChatCredentials } from 'app/utils/credentials';
+import { useSharedState } from 'app/utils/sharedstate';
 
 interface P {
   chat_id: string;
@@ -14,7 +15,7 @@ interface P {
 export default function MessageInputBox({ chat_id, suggestions, onSend, show_shadow }: P) {
   const chat_token = useChatCredentials(chat_id);
   const can_reply = !!chat_token;
-  const [text, setText] = React.useState(chat_token ? "" : "Can't add message to this chat.")
+  const [text, setText] = useSharedState("chatText", chat_token ? "" : "Can't add message to this chat.")
   function handleChange(_, data) {
     let text = data.value;
     setText(text);

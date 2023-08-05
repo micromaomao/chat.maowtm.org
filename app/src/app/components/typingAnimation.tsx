@@ -21,16 +21,21 @@ export function TypingAnimationComponent() {
 }
 
 export function MaybeShowTyping({ expiryTime }: { expiryTime: number | null }) {
+  let update = useState({})[1];
+  useEffect(() => {
+    let timer = null;
+    if (expiryTime > Date.now()) {
+      timer = setTimeout(() => {
+        update({});
+      }, expiryTime - Date.now());
+    }
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+    };
+  });
   if (expiryTime === null || Date.now() > expiryTime) {
     return null;
   }
-  let update = useState({})[1];
-  useEffect(() => {
-    let timer = setTimeout(() => {
-      update({});
-    }, expiryTime - Date.now());
-    return () => clearTimeout(timer);
-  });
   return (
     <TypingAnimationComponent />
   );
