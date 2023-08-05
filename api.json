@@ -642,7 +642,20 @@
         ],
         "parameters": [],
         "requestBody": {},
-        "responses": {}
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDialogueItemsResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          }
+        }
       }
     }
   },

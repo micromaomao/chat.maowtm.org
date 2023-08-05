@@ -28,6 +28,7 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
   }
   useEffect(() => {
     fetchInspectionData();
+    autoScrollUpdate();
   }, []);
 
   let pathSelectorComponent = null;

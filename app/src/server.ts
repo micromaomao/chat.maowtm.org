@@ -3,6 +3,7 @@ import api from "./api";
 import * as db from "./db";
 import { OpenAIError } from "./lib/llm/openai";
 import { APIError } from "./api/basic";
+import path from "path";
 
 (async () => {
   await db.init();
@@ -15,6 +16,10 @@ import { APIError } from "./api/basic";
   app.use("/api", api);
 
   app.use(express.static("./dist"));
+
+  app.get("/*", (req, res) => {
+    res.sendFile("./dist/index.html", {root: path.resolve(__dirname, "..")});
+  });
 
   app.use("/api", (err, req, res, next) => {
     if (err instanceof APIError) {

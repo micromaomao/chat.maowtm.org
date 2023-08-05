@@ -1,11 +1,12 @@
 import React from "react";
 import { Message, MessageType } from "app/openapi";
 import classes from "./chatMessagesList.module.css"
-import { Button, Spinner, Text, Tooltip } from "@fluentui/react-components";
-import { Edit16Filled, Edit16Regular, ErrorCircle20Regular, ErrorCircleFilled } from "@fluentui/react-icons";
+import { Button, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
+import { Edit16Filled, Edit16Regular, ErrorCircle20Regular } from "@fluentui/react-icons";
 import { useState } from "react";
-import MessageEditComponent from "./messageEdit";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
+
+const MessageEditComponent = React.lazy(() => import("./messageEdit"));
 
 interface MessageComponentProps {
   message: Message;
@@ -108,6 +109,15 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
   const [editingMsg, setEditingMsg] = useState<string | null>(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
+  const msg_edit_suspense = (
+    <Skeleton>
+      <SkeletonItem />
+      <div style={{ height: "10px" }} />
+      <SkeletonItem />
+      <div style={{ height: "10px" }} />
+      <SkeletonItem />
+    </Skeleton>
+  );
   return (
     <>
       {messages_list.map((message, i) => {
@@ -133,7 +143,9 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
           <React.Fragment key={message.id}>
             <MessageComponent message={message} handle_edit={enable_buttons ? handleEdit : undefined} editing={editingCurrMsg} />
             {editingCurrMsg ? (
-              <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} />
+              <React.Suspense fallback={msg_edit_suspense}>
+                <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} />
+              </React.Suspense>
             ) : null}
           </React.Fragment>
         );

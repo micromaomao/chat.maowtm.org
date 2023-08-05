@@ -8,6 +8,7 @@
   flex-direction: column;
   flex-wrap: nowrap;
   overflow-x: auto;
+  gap: 16px;
 }
 
 .headingRow {

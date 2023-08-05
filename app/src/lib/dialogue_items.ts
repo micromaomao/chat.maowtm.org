@@ -1,8 +1,9 @@
 import { MsgType } from "db/enums";
 import { DialogueItemInput, DialoguePath, DialoguePathElement, FetchedDialogueItemData } from "../api/v1/types";
-import { Client as DBClient } from "../db/index";
+import { Client as DBClient, withDBClient } from "../db/index";
 import getConfigStore from "db/config";
 import { APIError } from "../api/basic";
+import { ListDialogueItemsResult } from "app/openapi";
 
 export class DialogueItemNotFoundError extends APIError {
   constructor(item_id: string) {
@@ -309,4 +310,50 @@ export async function fetchDialogueChildren(item_id: string, db: DBClient): Prom
     values: [item_id]
   });
   return rows as DialoguePathElement[];
+}
+
+export async function listAllRoot(db?: DBClient): Promise<ListDialogueItemsResult> {
+  if (!db) {
+    return await withDBClient(db => listAllRoot(db));
+  }
+
+  let { rows } = await db.query({
+    name: "dialogue_items.ts#listAllRoot",
+    text: `
+      select
+        g.id as group_id,
+        i.item_id as dialogue_id,
+        p.q_text as canonical_phrasing_text
+      from
+        dialogue_group g
+        left outer join dialogue_item i
+          on (g.id = i.dialogue_group and i.parent is null)
+        left outer join dialogue_phrasing p
+          on (i.canonical_phrasing = p.id)`
+  });
+  let res: ListDialogueItemsResult = {
+    groups: []
+  };
+  let group_objs = new Map<string, any>();
+  for (let row of rows) {
+    let group_obj;
+    if (!group_objs.has(row.group_id)) {
+      group_obj = {
+        group_id: row.group_id,
+        items: []
+      };
+      group_objs.set(row.group_id, group_obj);
+      res.groups.push(group_obj);
+    } else {
+      group_obj = group_objs.get(row.group_id);
+    }
+
+    if (row.dialogue_id !== null) {
+      group_obj.items.push({
+        dialogue_id: row.dialogue_id,
+        canonical_phrasing_text: row.canonical_phrasing_text
+      });
+    }
+  }
+  return res;
 }

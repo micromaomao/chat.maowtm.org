@@ -2,7 +2,7 @@ import React from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import { useState } from "react";
 import { startNewChat } from "app/utils/actions";
-import classes from "./startNewChatButton.module.css";
+import * as classes from "./startNewChatButton.module.css";
 import { ErrorCircleRegular } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 

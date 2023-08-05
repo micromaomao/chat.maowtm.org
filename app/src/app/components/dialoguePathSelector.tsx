@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as classes from "./dialoguePathSelector.module.css";
-import { DialogueItemDetails, DialoguePathElement, MetadataDialoguePath } from "app/openapi";
+import { AdminService, DialogueItemDetails, DialoguePathElement, MetadataDialoguePath } from "app/openapi";
 import { Combobox, Option, OptionOnSelectData } from "@fluentui/react-combobox";
 import { fetchDialogueItem } from "app/utils/dialogueItemData";
 import { ErrorCircleRegular, List20Regular } from "@fluentui/react-icons";
@@ -73,7 +73,17 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
         setError(err);
       });
     } else {
-      setError(new Error("unimplemented"));
+      AdminService.getListDialogueItems().then(data => {
+        if (cancelled) return;
+        let list: DialoguePathElement[] = [];
+        for (let g of data.groups) {
+          list.push(...g.items);
+        }
+        setSiblings(list);
+      }, err => {
+        if (cancelled) return;
+        setError(err);
+      });
     }
     return () => {
       cancelled = true;
@@ -153,7 +163,7 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
           <List20Regular />
         ) : null}
       </div>
-      <div className={classes.comboContainer}>
+      <div>
         <Combobox
           size="large"
           multiselect={false}

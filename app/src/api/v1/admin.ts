@@ -6,7 +6,7 @@ import { APIError, APIValidationError, requireAdminAuth } from "../basic";
 import client_tags from "db/client_tag";
 import { withDBClient, Client as DBClient } from "db/index";
 import { MsgType } from "db/enums";
-import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
+import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, listAllRoot, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
 import { DialogueItemInput, InspectLastEditResult } from "./types";
 
 const apiRouter = Router();
@@ -138,6 +138,11 @@ apiRouter.get("/dialogue-item/:item_id", async (req, res) => {
     };
   });
   res.json(ret);
+});
+
+apiRouter.get("/list-dialogue-items", async (req, res) => {
+  const result = await listAllRoot();
+  res.json(result);
 });
 
 export default apiRouter;
