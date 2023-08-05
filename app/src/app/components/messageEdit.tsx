@@ -1,13 +1,13 @@
 import React, { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import * as classes from "./messageEdit.module.css";
-import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Skeleton, SkeletonItem, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
-import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, SaveRegular } from "@fluentui/react-icons";
-import { AdminService, DialogueItemDetails, InspectLastEditResult, Message, MetadataDialoguePath } from "app/openapi";
+import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Skeleton, SkeletonItem, Spinner, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
+import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, ErrorCircle20Regular, ErrorCircle24Regular, SaveRegular } from "@fluentui/react-icons";
+import { AdminService, ApiError, DialogueItemDetails, EditChatRequest, InspectLastEditResult, Message, MetadataDialoguePath } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
 import DialoguePathSelectorComponent from "./dialoguePathSelector";
 import { useSharedState } from "app/utils/sharedstate";
-import { fetchDialogueItem } from "app/utils/dialogueItemData";
+import { fetchDialogueItem, mutateDialogues } from "app/utils/dialogueItemData";
 
 interface FormP {
   updateId?: string | null;
@@ -84,7 +84,42 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
     return null;
   }, [phrasings]);
 
-  const hasValidationErr = replyValidationErr || phrasingValidationErr;
+  const hasValidationErr = !!replyValidationErr || !!phrasingValidationErr;
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<Error>(null);
+
+  const autoScrollUpdate = useAutoScrollUpdateSignal();
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      let req: EditChatRequest = {
+        phrasings, reply,
+      };
+      if (updateId) {
+        req.item_id = updateId;
+      } else {
+        req.parent_id = parentId;
+      }
+      await AdminService.putMessagesEditBot(message.id, req);
+      setSubmitting(false);
+      mutateDialogues();
+      onReset();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        e = new Error(e.body);
+      }
+      setSubmitting(false);
+      setSubmitError(e);
+    } finally {
+      autoScrollUpdate();
+    }
+  }
+
+  async function handleDelete() {
+  }
 
   return (
     <>
@@ -126,8 +161,10 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
         <Button
           appearance="primary"
           size="large"
-          icon={<SaveRegular />}
-          disabled={!!hasValidationErr}>
+          icon={!submitting ? <SaveRegular /> : <Spinner size="tiny" />}
+          disabled={hasValidationErr || submitting}
+          onClick={handleSubmit}
+        >
           Save
         </Button>
         <Button
@@ -138,14 +175,24 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
           Reset
         </Button>
         {updateId ? (
-          <DeleteButton item_id={updateId} />
+          <DeleteButton
+            item_id={updateId}
+            disabled={submitting}
+            onConfirm={handleDelete}
+          />
         ) : null}
       </div>
+
+      {submitError ? (
+        <div className={classes.error}>
+          <ErrorCircle20Regular style={{marginRight: "10px"}} /> {submitError.message}
+        </div>
+      ) : null}
     </>
   );
 }
 
-function DeleteButton({ item_id }: { item_id: string }) {
+function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onConfirm: () => void, disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [itemData, setItemData] = useState<DialogueItemDetails | null>(null);
   const [error, setError] = useState<Error>(null);
@@ -163,7 +210,7 @@ function DeleteButton({ item_id }: { item_id: string }) {
     return () => { cancelled = true };
   }, [open, item_id])
   return (
-    <Dialog modalType="modal" open={open} onOpenChange={(_, data) => setOpen(data.open)}>
+    <Dialog modalType="modal" open={open} onOpenChange={(_, data) => (!disabled ? setOpen(data.open) : undefined)}>
       <DialogTrigger>
         <Button
           appearance="transparent"
@@ -171,6 +218,7 @@ function DeleteButton({ item_id }: { item_id: string }) {
           icon={<DeleteRegular />}
           style={{ marginLeft: "auto" }}
           className={classes.deleteBtn}
+          disabled={disabled}
         >
           Delete this item
         </Button>
@@ -374,7 +422,6 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
   const [inspectionData, setInspectionData] = useState<InspectLastEditResult>(null)
   const [error, setError] = useState(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
-  const [reloadKey, setReloadKey] = useState(0);
   const [updateId, setUpdateId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
 
@@ -389,7 +436,7 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
   useEffect(() => {
     fetchInspectionData();
     autoScrollUpdate();
-  }, []);
+  }, [message.id]);
 
   function handlePathChange(is_create: boolean, item_or_parent_id: string) {
     if (is_create) {
@@ -413,7 +460,7 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
       initialPath = inspectionData.prev_reply_path;
     }
     pathSelectorComponent = (
-      <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} reset={reloadKey} />
+      <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} />
     );
   }
   useEffect(() => {
@@ -427,12 +474,9 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
   }, [initialPath, initialIsCreate]);
 
   function handleReload() {
-    if (initialPath !== null) {
-      handlePathChange(initialIsCreate, initialPath[initialPath.length - 1].dialogue_id);
-    } else {
-      handlePathChange(true, null);
-    }
-    setReloadKey(reloadKey + 1);
+    setInspectionData(null);
+    fetchInspectionData();
+    autoScrollUpdate();
   }
 
   let form = null;
@@ -463,7 +507,7 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
           {error.message}
         </Alert>
       ) : null}
-      <Fragment key={reloadKey}>
+      <Fragment>
         {pathSelectorComponent}
         {form}
       </Fragment>

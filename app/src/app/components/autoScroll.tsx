@@ -11,6 +11,7 @@ const signalContext = React.createContext<(obj: any) => void | null>(null);
 export default function AutoScrollComponent({ onUserScroll, containerRef, children }: P): JSX.Element {
   const [keepAtBottom, setKeepAtBottom] = useState<boolean>(true);
   const forceUpdate = useState({})[1];
+  const [hook, setHook] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     let container = containerRef.current;
@@ -23,9 +24,13 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
     }
 
     container.addEventListener("scroll", onScrollHandler);
-
+    onScrollHandler();
+    setHook(onScrollHandler);
+    let interval = setInterval(onScrollHandler, 1000);
     return () => {
       container.removeEventListener("scroll", onScrollHandler);
+      clearInterval(interval);
+      setHook(null);
     };
   }, [containerRef.current, onUserScroll]);
 
@@ -47,6 +52,9 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
   useEffect(() => {
     if (keepAtBottom && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+    if (hook) {
+      hook();
     }
   });
   return (

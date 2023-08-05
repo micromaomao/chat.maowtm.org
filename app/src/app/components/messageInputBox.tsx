@@ -4,6 +4,7 @@ import * as classes from './messageInputBox.module.css';
 import { LightbulbFilament24Regular, LightbulbFilamentRegular, SendFilled } from '@fluentui/react-icons';
 import { useChatCredentials } from 'app/utils/credentials';
 import { useSharedState } from 'app/utils/sharedstate';
+import StartNewChatButton from './startNewChatButton';
 
 interface P {
   chat_id: string;
@@ -77,6 +78,8 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
             >{sugg}</Button>
           );
         })}
+        <div style={{marginLeft: "auto"}} />
+        <StartNewChatButton />
       </div>
       <div className={classes.textRow}>
         <Textarea

@@ -10,7 +10,6 @@ interface P {
   initialPath: MetadataDialoguePath;
   initialIsCreate: boolean;
   onChange?: (is_create: boolean, item_or_parent_id: string) => void;
-  reset: any;
 }
 
 interface RowP {
@@ -212,14 +211,14 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
   );
 }
 
-export default function DialoguePathSelectorComponent({ initialPath, initialIsCreate, onChange, reset }: P) {
+export default function DialoguePathSelectorComponent({ initialPath, initialIsCreate, onChange }: P) {
   let [path, setPath] = useState<MetadataDialoguePath>(initialPath);
   let [isCreate, setIsCreate] = useState<boolean>(initialIsCreate);
 
   useEffect(() => {
     setPath(initialPath);
     setIsCreate(initialIsCreate);
-  }, [reset]);
+  }, [initialPath, initialIsCreate]);
 
   if (!path) {
     path = [];

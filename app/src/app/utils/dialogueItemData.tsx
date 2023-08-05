@@ -28,14 +28,8 @@ export function fetchDialogueItem(id: string): Promise<DialogueItemDetails> {
   return promise;
 }
 
-export function mutateDialogueGroup(group_id: string) {
-  let keys = Array.from(cache.keys());
-  for (let key of keys) {
-    let ent = cache.get(key);
-    if (ent && ent.item_data.group_id == group_id) {
-      cache.delete(key);
-    }
-  }
+export function mutateDialogues() {
+  cache.clear();
   rootItemsPromise = null;
 }
 

@@ -19,9 +19,9 @@ export default function StartNewChatButton() {
     try {
       await startNewChat(navigate);
     } catch (e) {
-      setStarting(false);
       setError(e);
     }
+    setStarting(false);
   }
   return (
     <div>
