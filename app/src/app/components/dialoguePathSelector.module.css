@@ -2,8 +2,22 @@
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  align-items: center;
+}
+
+.icon {
+  width: 20px;
 }
 
 .error {
   color: #bc2f32;
+  grid-area: 2 / 1 / 3 / 3;
 }

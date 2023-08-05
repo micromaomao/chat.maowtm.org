@@ -1,7 +1,7 @@
 import { Button, Caption1, Textarea } from '@fluentui/react-components';
 import React, { useRef } from 'react';
 import * as classes from './messageInputBox.module.css';
-import { SendFilled } from '@fluentui/react-icons';
+import { LightbulbFilament24Regular, LightbulbFilamentRegular, SendFilled } from '@fluentui/react-icons';
 import { useChatCredentials } from 'app/utils/credentials';
 import { useSharedState } from 'app/utils/sharedstate';
 
@@ -62,6 +62,9 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
   return (
     <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "")}>
       <div className={classes.suggestionRow}>
+        {suggestions.length > 0 ? (
+          <LightbulbFilament24Regular color="var(--colorBrandForeground1)" />
+        ) : null}
         {suggestions.map(sugg => {
           return (
             <Button

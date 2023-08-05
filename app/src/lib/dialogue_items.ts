@@ -296,5 +296,17 @@ export async function tracePrevReplyMsgDialoguePath(message_id: string, db: DBCl
 }
 
 export async function fetchDialogueChildren(item_id: string, db: DBClient): Promise<DialoguePathElement[]> {
-  throw new Error("Not implemented");
+  let { rows } = await db.query({
+    text: `
+      select
+        i.item_id as dialogue_id,
+        p.q_text as canonical_phrasing_text
+      from
+        dialogue_item i
+        left outer join dialogue_phrasing p
+        on (i.canonical_phrasing = p.id)
+      where i.parent = $1`,
+    values: [item_id]
+  });
+  return rows as DialoguePathElement[];
 }

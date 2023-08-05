@@ -350,7 +350,7 @@ export class ChatController extends React.Component<P, S> {
     });
     // Phantom will be automatically removed by SSE event.
     this.setState({
-      typingExpiry: Date.now() + 5000,
+      typingExpiry: Date.now() + 8000,
     });
   }
 }

@@ -631,6 +631,19 @@
           "required": true
         }
       ]
+    },
+    "/list-dialogue-items": {
+      "get": {
+        "summary": "Get a list of all dialogue groups and root-level dialogue items",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {},
+        "responses": {}
+      }
     }
   },
   "components": {
@@ -999,6 +1012,37 @@
         "required": [
           "dialogue_id",
           "canonical_phrasing_text"
+        ]
+      },
+      "ListDialogueItemsResult": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group_id": {
+                  "type": "string",
+                  "example": "01H732ZGMXD2GXH76P3M0ZSNSJ"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DialoguePathElement"
+                  }
+                }
+              },
+              "required": [
+                "group_id",
+                "items"
+              ]
+            },
+            "description": "List of dialogue groups"
+          }
+        },
+        "required": [
+          "groups"
         ]
       }
     },

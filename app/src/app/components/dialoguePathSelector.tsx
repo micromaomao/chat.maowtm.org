@@ -3,7 +3,7 @@ import * as classes from "./dialoguePathSelector.module.css";
 import { DialogueItemDetails, DialoguePathElement, MetadataDialoguePath } from "app/openapi";
 import { Combobox, Option, OptionOnSelectData } from "@fluentui/react-combobox";
 import { fetchDialogueItem } from "app/utils/dialogueItemData";
-import { ErrorCircleRegular } from "@fluentui/react-icons";
+import { ErrorCircleRegular, List20Regular } from "@fluentui/react-icons";
 import { Text } from "@fluentui/react-components";
 
 interface P {
@@ -147,36 +147,43 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
   }
 
   return (
-    <div className={classes.pathItem} style={{ paddingLeft: `${indent}px` }}>
-      <Combobox
-        size="large"
-        multiselect={false}
-        onOptionSelect={handleOptionSelect}
-        onInput={handleInput}
-        selectedOptions={[optionToString(current_item_or_special)]}
-        value={freeformValue}
-        style={{ width: "100%" }}
-        freeform={true}
-        onBlur={handleBlur}
-      >
-        {options.map(opt => {
-          if (searching) {
-            if (typeof opt == "string" && opt != OptionElementSpecial.CREATE_UNDER_PARENT) {
+    <div className={classes.row} style={{ paddingLeft: `${indent}px` }}>
+      <div className={classes.icon}>
+        {item ? (
+          <List20Regular />
+        ) : null}
+      </div>
+      <div className={classes.comboContainer}>
+        <Combobox
+          size="large"
+          multiselect={false}
+          onOptionSelect={handleOptionSelect}
+          onInput={handleInput}
+          selectedOptions={[optionToString(current_item_or_special)]}
+          value={freeformValue}
+          style={{ width: "100%" }}
+          freeform={true}
+          onBlur={handleBlur}
+        >
+          {options.map(opt => {
+            if (searching) {
+              if (typeof opt == "string" && opt != OptionElementSpecial.CREATE_UNDER_PARENT) {
+                return null;
+              }
+            }
+            let strid = optionToString(opt);
+            let text = optionToDisplayString(opt);
+            if (searching && typeof opt != "string" && text.toLowerCase().indexOf(freeformValue.toLowerCase()) == -1) {
               return null;
             }
-          }
-          let strid = optionToString(opt);
-          let text = optionToDisplayString(opt);
-          if (searching && typeof opt != "string" && text.toLowerCase().indexOf(freeformValue.toLowerCase()) == -1) {
-            return null;
-          }
-          return (
-            <Option key={strid} value={strid} text={text} disabled={opt === OptionElementSpecial.LOADING}>
-              {typeof opt == "string" ? <i>{text}</i> : text}
-            </Option>
-          );
-        })}
-      </Combobox>
+            return (
+              <Option key={strid} value={strid} text={text} disabled={opt === OptionElementSpecial.LOADING}>
+                {typeof opt == "string" ? <i>{text}</i> : text}
+              </Option>
+            );
+          })}
+        </Combobox>
+      </div>
       {error ? (
         <div className={classes.error}>
           <ErrorCircleRegular /> <Text>Unable to get children list: {error.message}</Text>
