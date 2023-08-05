@@ -375,6 +375,8 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
   const [error, setError] = useState(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
   const [reloadKey, setReloadKey] = useState(0);
+  const [updateId, setUpdateId] = useState<string | null>(null);
+  const [parentId, setParentId] = useState<string | null>(null);
 
   async function fetchInspectionData() {
     try {
@@ -388,9 +390,6 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
     fetchInspectionData();
     autoScrollUpdate();
   }, []);
-
-  const [updateId, setUpdateId] = useState<string | null>(null);
-  const [parentId, setParentId] = useState<string | null>(null);
 
   function handlePathChange(is_create: boolean, item_or_parent_id: string) {
     if (is_create) {
@@ -417,6 +416,15 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
       <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} reset={reloadKey} />
     );
   }
+  useEffect(() => {
+    if (initialIsCreate) {
+      setParentId(initialPath ? initialPath[initialPath.length - 1].dialogue_id : null);
+      setUpdateId(null);
+    } else {
+      setUpdateId(initialPath[initialPath.length - 1].dialogue_id);
+      setParentId(null);
+    }
+  }, [initialPath, initialIsCreate]);
 
   function handleReload() {
     if (initialPath !== null) {
