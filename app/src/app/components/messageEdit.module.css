@@ -66,3 +66,9 @@
 .deleteBtn:hover:active {
   color: var(--colorPaletteRedForeground2);
 }
+
+.itemDataBox {
+  border: 2px solid var(--colorNeutralStroke2);
+  padding: 10px 20px;
+  border-radius: 8px;
+}

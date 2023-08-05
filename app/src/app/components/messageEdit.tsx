@@ -1,8 +1,8 @@
 import React, { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import * as classes from "./messageEdit.module.css";
-import { Button, Field, Input, Skeleton, SkeletonItem, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
+import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Skeleton, SkeletonItem, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
 import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, SaveRegular } from "@fluentui/react-icons";
-import { AdminService, InspectLastEditResult, Message, MetadataDialoguePath } from "app/openapi";
+import { AdminService, DialogueItemDetails, InspectLastEditResult, Message, MetadataDialoguePath } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
 import DialoguePathSelectorComponent from "./dialoguePathSelector";
@@ -137,6 +137,34 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
         >
           Reset
         </Button>
+        {updateId ? (
+          <DeleteButton item_id={updateId} />
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function DeleteButton({ item_id }: { item_id: string }) {
+  const [open, setOpen] = useState(false);
+  const [itemData, setItemData] = useState<DialogueItemDetails | null>(null);
+  const [error, setError] = useState<Error>(null);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetchDialogueItem(item_id).then(item => {
+      if (cancelled) return;
+      setItemData(item);
+      setError(null);
+    }, err => {
+      if (cancelled) return;
+      setError(err);
+    });
+    return () => { cancelled = true };
+  }, [open, item_id])
+  return (
+    <Dialog modalType="modal" open={open} onOpenChange={(_, data) => setOpen(data.open)}>
+      <DialogTrigger>
         <Button
           appearance="transparent"
           size="large"
@@ -146,9 +174,54 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
         >
           Delete this item
         </Button>
-      </div>
-    </>
-  );
+      </DialogTrigger>
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>Delete dialogue item?</DialogTitle>
+          <DialogContent>
+            {itemData === null ? (
+              error === null ? (
+                <Skeleton>
+                  <SkeletonItem />
+                </Skeleton>
+              ) : (
+                <>
+                  Error getting item data: {error.message}
+                </>
+              )
+            ) : (
+              <>
+                <Body2>
+                  Are you sure you want to delete the following dialogue item? This will also reset the message edit state.
+                </Body2>
+                <div style={{ height: "10px" }} />
+                <div className={classes.itemDataBox}>
+                  <Body1>&gt; {itemData.item_data.phrasings[0]}</Body1>
+                  <br />
+                  <Body1>&lt; {itemData.item_data.reply}</Body1>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </DialogBody>
+        <div style={{ height: "10px" }} />
+        <DialogActions position="end" style={{ justifyContent: "end" }}>
+          {itemData === null ? (
+            <DialogTrigger>
+              <Button appearance="secondary" size="medium">Cancel</Button>
+            </DialogTrigger>
+          ) : (
+            <>
+              <DialogTrigger>
+                <Button appearance="secondary" size="medium">Cancel</Button>
+              </DialogTrigger>
+              <Button appearance="primary" size="medium">Delete</Button>
+            </>
+          )}
+        </DialogActions>
+      </DialogSurface>
+    </Dialog>
+  )
 }
 
 interface PhrasingEditorP {
