@@ -1,6 +1,6 @@
 import React, { RefObject } from "react";
 import { getCredentialManager, subscribe as credentialsSubscribe } from "app/utils/credentials";
-import { DefaultService as API, ChatSession, ChatSuggestions, DefaultService, Message, MessageType } from "app/openapi"
+import { DefaultService as API, ApiError, ChatSession, ChatSuggestions, DefaultService, Message, MessageType } from "app/openapi"
 import ChatSkeleton from "app/components/chatSkeleton";
 import StartNewChatButton from "./startNewChatButton";
 import * as classes from "./chatController.module.css"
@@ -10,13 +10,20 @@ import ChatMessagesList, { PhantomMessage, PhantomMessageComponent } from "./cha
 import AutoScrollComponent from "./autoScroll";
 import MessageInputBox from "./messageInputBox";
 import { generateToken } from "lib/secure_token/browser";
-import TypingAnimationComponent, { MaybeShowTyping } from "./typingAnimation";
+import { MaybeShowTyping } from "./typingAnimation";
 import { SharedStateProvider } from "app/utils/sharedstate";
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
-  let sess_data = await API.getChatSession(chat_id, undefined, undefined, chat_token);
-  return sess_data;
+  try {
+    let sess_data = await API.getChatSession(chat_id, undefined, undefined, chat_token);
+    return sess_data;
+  } catch (e) {
+    if (e instanceof ApiError) {
+      e = new Error(e.body);
+    }
+    throw e;
+  }
 }
 
 function ChatListError({ err, onRetry }: { err: Error, onRetry: () => void }) {
@@ -268,7 +275,7 @@ export class ChatController extends React.Component<P, S> {
 
   render(): React.ReactNode {
     return (
-      <SharedStateProvider sessionStorageId={`chatMessageInputBox-${this.props.chat_id}`}>
+      <SharedStateProvider sessionStorageId={`chat_${this.props.chat_id}`}>
         <div className={classes.container}>
           <div ref={this.containerRef} className={
             classes.messageListContainer +

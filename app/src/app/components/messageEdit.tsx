@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import * as classes from "./messageEdit.module.css";
 import { Button, Skeleton, SkeletonItem, Subtitle1 } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
-import { AdminService, InspectLastEditResult, Message } from "app/openapi";
+import { AdminService, InspectLastEditResult, Message, MetadataDialoguePath } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
+import DialoguePathSelectorComponent from "./dialoguePathSelector";
 
 interface P {
   message: Message;
@@ -29,6 +30,21 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
     fetchInspectionData();
   }, []);
 
+  let pathSelectorComponent = null;
+  if (inspectionData !== null) {
+    let initialPath: MetadataDialoguePath;
+    let initialIsCreate = true;
+    if (inspectionData.edited) {
+      initialPath = inspectionData.updated_dialogue_item.path;
+      initialIsCreate = false;
+    } else {
+      initialPath = inspectionData.prev_reply_path;
+    }
+    pathSelectorComponent = (
+      <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} />
+    );
+  }
+
   return (
     <div className={classes.container}>
       <div className={classes.headingRow}>
@@ -47,11 +63,7 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
           {error.message}
         </Alert>
       ) : null}
-      {inspectionData !== null ? (
-        <>
-          {JSON.stringify(inspectionData)}
-        </>
-      ) : null}
+      {pathSelectorComponent}
     </div>
   );
 }

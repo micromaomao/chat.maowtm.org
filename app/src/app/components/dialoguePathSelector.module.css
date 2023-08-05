@@ -1,0 +1,9 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.error {
+  color: #bc2f32;
+}

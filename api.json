@@ -586,6 +586,51 @@
           }
         ]
       }
+    },
+    "/dialogue-item/{item_id}": {
+      "get": {
+        "summary": "Get details about a dialogue item",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DialogueItemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          },
+          "404": {
+            "description": "Invalid item id"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "item_id",
+          "description": "",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ]
     }
   },
   "components": {
@@ -677,23 +722,7 @@
         "type": "array",
         "nullable": true,
         "items": {
-          "type": "object",
-          "properties": {
-            "dialogue_id": {
-              "type": "string",
-              "example": "01H5FQ2CCMX9P8ZT6XA80RR9MQ"
-            },
-            "canonical_phrasing_text": {
-              "type": "string",
-              "example": "What is your favourite programming language?",
-              "minLength": 1
-            }
-          },
-          "description": "Dialogue path items in parent-child order",
-          "required": [
-            "dialogue_id",
-            "canonical_phrasing_text"
-          ]
+          "$ref": "#/components/schemas/DialoguePathElement"
         },
         "description": "A dialogue item's path, from root to child, including the item itself",
         "minItems": 1
@@ -924,6 +953,51 @@
           "edited"
         ],
         "description": "If `edited` is true, `updated_dialogue_item` will exist. Otherwise, `prev_reply_path` will exist, and will be either `null`, or the path of the previous reply, useful for creating a new child under that."
+      },
+      "DialogueItemDetails": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the dialogue item"
+          },
+          "group_id": {
+            "type": "string",
+            "description": "ID of the dialogue group"
+          },
+          "item_data": {
+            "$ref": "#/components/schemas/FetchedDialogueItemData"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DialoguePathElement"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "group_id",
+          "children"
+        ]
+      },
+      "DialoguePathElement": {
+        "type": "object",
+        "properties": {
+          "dialogue_id": {
+            "type": "string",
+            "example": "01H5FQ2CCMX9P8ZT6XA80RR9MQ"
+          },
+          "canonical_phrasing_text": {
+            "type": "string",
+            "example": "What is your favourite programming language?",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "dialogue_id",
+          "canonical_phrasing_text"
+        ]
       }
     },
     "securitySchemes": {

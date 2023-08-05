@@ -106,12 +106,12 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
           }
         }
         return (
-          <>
-            <MessageComponent key={message.id} message={message} handle_edit={enable_buttons ? handleEdit : undefined} editing={editingCurrMsg} />
+          <React.Fragment key={message.id}>
+            <MessageComponent message={message} handle_edit={enable_buttons ? handleEdit : undefined} editing={editingCurrMsg} />
             {editingCurrMsg ? (
-              <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} key={`edit ${message.id}`} />
+              <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} />
             ) : null}
-          </>
+          </React.Fragment>
         );
       })}
     </>
