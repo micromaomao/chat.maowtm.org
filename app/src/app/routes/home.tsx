@@ -1,11 +1,10 @@
+import StartNewChatButton from "app/components/startNewChatButton";
 import React from "react";
-import { Link } from "react-router-dom";
 
 function Component() {
   return (
     <div>
-      Home<br />
-      <Link to="/admin">Admin</Link>
+      <StartNewChatButton />
     </div>
   );
 }

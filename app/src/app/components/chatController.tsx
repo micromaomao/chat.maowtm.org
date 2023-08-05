@@ -10,6 +10,7 @@ import ChatMessagesList, { PhantomMessage, PhantomMessageComponent } from "./cha
 import AutoScrollComponent from "./autoScroll";
 import MessageInputBox from "./messageInputBox";
 import { generateToken } from "lib/secure_token/browser";
+import TypingAnimationComponent, { MaybeShowTyping } from "./typingAnimation";
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
@@ -38,6 +39,7 @@ interface S {
   scrolling_to_bottom: boolean;
   suggestions: ChatSuggestions | null;
   inTransitMessages: PhantomMessage[];
+  typingExpiry: number | null;
 }
 
 interface P {
@@ -52,6 +54,7 @@ const InitialState: S = {
   scrolling_to_bottom: true,
   suggestions: null,
   inTransitMessages: [],
+  typingExpiry: null,
 };
 
 export class ChatController extends React.Component<P, S> {
@@ -118,6 +121,7 @@ export class ChatController extends React.Component<P, S> {
     this.setState({
       messages: messages,
       inTransitMessages: inTransitMessages,
+      typingExpiry: null,
     });
   }
 
@@ -182,7 +186,6 @@ export class ChatController extends React.Component<P, S> {
     return new Promise((resolve, reject) => {
       let resolved = false;
       sseEventSource.addEventListener("open", evt => {
-        console.log("!")
         resolve();
         resolved = true;
         refreshSSEPingTimeout();
@@ -214,7 +217,6 @@ export class ChatController extends React.Component<P, S> {
         return;
       }
       let arr = await Promise.allSettled([
-        this.startSSE(),
         fetchChatData(this.props.chat_id).then(init_msg_list => {
           this.setState({
             messages: init_msg_list.messages,
@@ -222,7 +224,8 @@ export class ChatController extends React.Component<P, S> {
             initial_loading: false,
             messages_error: null,
           });
-        })
+        }),
+        this.startSSE(),
       ]);
       for (let elem of arr) {
         if (elem.status == "rejected") {
@@ -277,6 +280,7 @@ export class ChatController extends React.Component<P, S> {
               {this.state.inTransitMessages.map(msg => (
                 <PhantomMessageComponent key={msg.client_tag} message={msg} onRetry={this.handleSendPhantom} />
               ))}
+              <MaybeShowTyping expiryTime={this.state.typingExpiry} />
             </AutoScrollComponent>
           ) : (
             this.state.initial_loading ? (
@@ -324,6 +328,7 @@ export class ChatController extends React.Component<P, S> {
       phantom.error = e;
       this.setState({
         inTransitMessages: this.state.inTransitMessages,
+        typingExpiry: null,
       });
     }
   }
@@ -334,5 +339,8 @@ export class ChatController extends React.Component<P, S> {
       client_tag: phantom.client_tag,
     });
     // Phantom will be automatically removed by SSE event.
+    this.setState({
+      typingExpiry: Date.now() + 5000,
+    });
   }
 }

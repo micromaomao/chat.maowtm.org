@@ -27,7 +27,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     char_count_style = { color: "#aaa" };
   }
   let sendDisabled = false;
-  if (text.length === 0 || text.length > max_length || !can_reply) {
+  if (text.trim().length === 0 || text.length > max_length || !can_reply) {
     sendDisabled = true;
   }
 

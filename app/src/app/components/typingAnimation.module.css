@@ -1,0 +1,49 @@
+.container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+}
+
+.circle {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 100%;
+  background-color: #A200E1;
+  opacity: 0.2;
+  transform: translateY(0px);
+  animation-name: animation;
+  animation-duration: 1.5s;
+  animation-iteration-count: infinite;
+}
+
+@keyframes animation {
+  0% {
+    opacity: 0.2;
+    transform: translateY(0px);
+  }
+
+  25% {
+    opacity: 0.2;
+    transform: translateY(0px);
+    animation-timing-function: ease-in-out;
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-5px);
+    animation-timing-function: ease-in-out;
+  }
+
+  75% {
+    opacity: 0.2;
+    transform: translateY(0px);
+    animation-timing-function: ease-in-out;
+  }
+
+  100% {
+    opacity: 0.2;
+    transform: translateY(0px);
+  }
+}
