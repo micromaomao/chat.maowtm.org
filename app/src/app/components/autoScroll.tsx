@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useState } from "react";
+import React, { RefObject, useContext, useEffect, useState } from "react";
 
 interface P {
   onUserScroll?: ((is_at_bottom: boolean) => void) | null;
@@ -6,8 +6,11 @@ interface P {
   children: React.ReactNode;
 }
 
+const signalContext = React.createContext<(obj: any) => void | null>(null);
+
 export default function AutoScrollComponent({ onUserScroll, containerRef, children }: P): JSX.Element {
   const [keepAtBottom, setKeepAtBottom] = useState<boolean>(true);
+  const forceUpdate = useState({})[1];
 
   useEffect(() => {
     let container = containerRef.current;
@@ -46,5 +49,14 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   });
-  return <>{children}</>;
+  return (
+    <signalContext.Provider value={forceUpdate}>
+      {children}
+    </signalContext.Provider>
+  );
+}
+
+export function useAutoScrollUpdateSignal() {
+  let signal = useContext(signalContext);
+  return () => signal({});
 }

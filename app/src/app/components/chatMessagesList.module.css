@@ -28,9 +28,10 @@
 
 .box {
   border-radius: 8px;
-  padding: 8px 15px 12px 15px;
+  padding: 8px 15px;
   flex-shrink: 1;
   max-width: 900px;
+  line-height: 1;
 }
 
 .excludedMsg .box {

@@ -5,6 +5,7 @@ import { Button, Spinner, Text, Tooltip } from "@fluentui/react-components";
 import { Edit16Filled, Edit16Regular, ErrorCircle20Regular, ErrorCircleFilled } from "@fluentui/react-icons";
 import { useState } from "react";
 import MessageEditComponent from "./messageEdit";
+import { useAutoScrollUpdateSignal } from "./autoScroll";
 
 interface MessageComponentProps {
   message: Message;
@@ -80,14 +81,17 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
   const [editingMsg, setEditingMsg] = useState<string | null>(null);
+  const autoScrollUpdate = useAutoScrollUpdateSignal();
   return (
     <>
       {messages_list.map((message) => {
         const handleEdit = () => {
           setEditingMsg(message.id);
+          autoScrollUpdate();
         };
         const handleClose = () => {
           setEditingMsg(null);
+          autoScrollUpdate();
         };
         return (
           <>
