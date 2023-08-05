@@ -174,7 +174,10 @@ in ${this.session_id}:`, e);
           from chat_message msg
           left outer join chat_message_embedding emb
             on msg.id = emb.msg and emb.model = $1
-          where msg.session = $2 and msg.exclude_from_generation = false
+          where
+            msg.session = $2 and
+            msg.exclude_from_generation = false and
+            (msg.msg_type = ${MsgType.User} or msg.msg_type = ${MsgType.Bot})
           order by id desc
           limit $3;`,
         values: [embedding_model.model_name, this.session_id, config.generation_model.history_limit],

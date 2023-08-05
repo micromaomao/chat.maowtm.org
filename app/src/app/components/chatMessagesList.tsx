@@ -25,15 +25,45 @@ export interface Props {
   enable_buttons: boolean;
 }
 
-export function MessageComponent({ message, handle_edit, editing }: MessageComponentProps) {
-  const box = (
+function getBox(content: string, type: MessageType, strikethrough: boolean) {
+  return (
     <div className={classes.box}>
-      <Text weight={message.msg_type == "user" ? "semibold" : "regular"} size={400} strikethrough={message.exclude_from_generation} style={{ whiteSpace: "pre-wrap" }}>{message.content}</Text>
+      <Text
+        weight={type == MessageType.USER ? "semibold" : "regular"}
+        size={400}
+        strikethrough={strikethrough}
+        style={{ whiteSpace: "pre-wrap" }}
+      >
+        {content}
+      </Text>
     </div>
   );
+}
+
+export function OrderBoxAndButtons({ message_type, box, buttons }) {
+  return (
+    <>
+      {message_type == MessageType.USER ? (
+        <>
+          {buttons}
+          {box}
+        </>
+      ) : null}
+      {message_type == MessageType.BOT ? (
+        <>
+          {box}
+          {buttons}
+        </>
+      ) : null}
+    </>
+  )
+}
+
+export function MessageComponent({ message, handle_edit, editing }: MessageComponentProps) {
+  const box = getBox(message.content, message.msg_type, message.exclude_from_generation);
   const buttons = (
     <div className={classes.buttons}>
-      {(handle_edit && message.msg_type == "bot" && message.metadata) ?
+      {(handle_edit && message.msg_type == MessageType.BOT && message.metadata) ?
         <Button
           onClick={handle_edit}
           icon={message.metadata?.updated_before ? <Edit16Filled /> : <Edit16Regular />}
@@ -50,18 +80,13 @@ export function MessageComponent({ message, handle_edit, editing }: MessageCompo
       (message.exclude_from_generation ? ` ${classes.excludedMsg}` : "") +
       (editing ? ` ${classes.editingMsg}` : "")
     }>
-      {message.msg_type === "user" ? buttons : box}
-      {message.msg_type === "user" ? box : buttons}
+      <OrderBoxAndButtons message_type={message.msg_type} box={box} buttons={buttons} />
     </div>
   )
 }
 
 export function PhantomMessageComponent({ message, onRetry }: { message: PhantomMessage, onRetry: (msg: PhantomMessage) => void }) {
-  const box = (
-    <div className={classes.box}>
-      <Text weight={message.msg_type == "user" ? "semibold" : "regular"} size={400} style={{ whiteSpace: "pre-wrap" }}>{message.content}</Text>
-    </div>
-  );
+  const box = getBox(message.content, message.msg_type, false);
   const buttons = (
     <div className={classes.buttons + " " + classes.phantomButtons}>
       {message.error ? (
@@ -75,8 +100,7 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
   );
   return (
     <div className={classes.message + " " + classes[`msgType_${message.msg_type}`]}>
-      {message.msg_type === "user" ? buttons : box}
-      {message.msg_type === "user" ? box : buttons}
+      <OrderBoxAndButtons message_type={message.msg_type} box={box} buttons={buttons} />
     </div>
   );
 }

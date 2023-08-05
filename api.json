@@ -927,12 +927,18 @@
           },
           "path": {
             "$ref": "#/components/schemas/MetadataDialoguePath"
+          },
+          "group_id": {
+            "type": "string",
+            "description": "ID of the dialogue group this item belongs to",
+            "example": "01H72XYPNGZP4G49SGB6TPG3FV"
           }
         },
         "required": [
           "phrasings",
           "reply",
-          "path"
+          "path",
+          "group_id"
         ]
       },
       "InspectLastEditResult": {
@@ -961,10 +967,6 @@
             "type": "string",
             "description": "ID of the dialogue item"
           },
-          "group_id": {
-            "type": "string",
-            "description": "ID of the dialogue group"
-          },
           "item_data": {
             "$ref": "#/components/schemas/FetchedDialogueItemData"
           },
@@ -977,8 +979,8 @@
         },
         "required": [
           "id",
-          "group_id",
-          "children"
+          "children",
+          "item_data"
         ]
       },
       "DialoguePathElement": {

@@ -35,3 +35,13 @@
 .shadow {
   box-shadow: 0 -2px 2px rgba(0, 0, 0, 0.2);
 }
+
+.suggestionBtn {
+  border: 1px solid var(--colorBrandStroke1);
+}
+.suggestionBtn:hover {
+  border: 1px solid var(--colorCompoundBrandStrokeHover);
+}
+.suggestionBtn:hover:active {
+  border: 1px solid var(--colorCompoundBrandStrokePressed);
+}

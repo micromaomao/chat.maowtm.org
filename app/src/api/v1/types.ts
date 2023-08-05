@@ -40,10 +40,12 @@ export interface NewChatSessionResult {
   chat_token: string;
 }
 
-export type DialoguePath = {
+export interface DialoguePathElement {
   dialogue_id: string;
   canonical_phrasing_text: string;
-}[];
+}
+
+export type DialoguePath = DialoguePathElement[];
 
 export interface DialogueItemInput {
   /**
@@ -55,6 +57,7 @@ export interface DialogueItemInput {
 
 export interface FetchedDialogueItemData extends DialogueItemInput {
   path: DialoguePath;
+  group_id: string;
 }
 
 export type InspectLastEditResult = {

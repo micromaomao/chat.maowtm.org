@@ -31,8 +31,10 @@
   padding: 8px 15px;
   flex-shrink: 1;
   max-width: 900px;
+  max-width: min(900px, calc(100% - 40px));
   line-height: 1;
   white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .excludedMsg .box {

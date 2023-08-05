@@ -1,5 +1,5 @@
 import { Button, Caption1, Textarea } from '@fluentui/react-components';
-import React from 'react';
+import React, { useRef } from 'react';
 import * as classes from './messageInputBox.module.css';
 import { SendFilled } from '@fluentui/react-icons';
 import { useChatCredentials } from 'app/utils/credentials';
@@ -15,7 +15,9 @@ interface P {
 export default function MessageInputBox({ chat_id, suggestions, onSend, show_shadow }: P) {
   const chat_token = useChatCredentials(chat_id);
   const can_reply = !!chat_token;
-  const [text, setText] = useSharedState("chatText", chat_token ? "" : "Can't add message to this chat.")
+  const [text, setText] = useSharedState("chatText", chat_token ? "" : "Can't add message to this chat.");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   function handleChange(_, data) {
     let text = data.value;
     setText(text);
@@ -38,6 +40,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     }
     onSend(text);
     setText("");
+    textareaRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -47,24 +50,27 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     }
   }
 
+  function handleSelectSuggestion(sugg: string) {
+    if (text == sugg) {
+      handleSend();
+    } else {
+      setText(sugg);
+      textareaRef.current?.focus();
+    }
+  }
+
   return (
     <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "")}>
       <div className={classes.suggestionRow}>
         {suggestions.map(sugg => {
-          function handleSelect() {
-            if (text == sugg) {
-              handleSend();
-            } else {
-              setText(sugg);
-            }
-          }
           return (
             <Button
-              appearance="outline"
-              shape="rounded"
+              appearance="transparent"
+              shape="circular"
               key={sugg}
               disabled={!can_reply}
-              onClick={handleSelect}
+              onClick={handleSelectSuggestion.bind(null, sugg)}
+              className={classes.suggestionBtn}
             >{sugg}</Button>
           );
         })}
@@ -77,6 +83,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
           size="large"
           disabled={!can_reply}
           onKeyDown={handleKeyDown}
+          ref={textareaRef}
         />
       </div>
       <div className={classes.sendRow}>

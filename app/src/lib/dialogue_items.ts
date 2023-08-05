@@ -1,5 +1,5 @@
 import { MsgType } from "db/enums";
-import { DialogueItemInput, DialoguePath, FetchedDialogueItemData } from "../api/v1/types";
+import { DialogueItemInput, DialoguePath, DialoguePathElement, FetchedDialogueItemData } from "../api/v1/types";
 import { Client as DBClient } from "../db/index";
 import getConfigStore from "db/config";
 import { APIError } from "../api/basic";
@@ -44,17 +44,19 @@ export async function traceDialogueItemPath(item_id: string, db: DBClient): Prom
 
 export async function fetchDialogueItem(item_id: string, db: DBClient): Promise<FetchedDialogueItemData> {
   let { rows }: { rows: any[] } = await db.query({
-    text: "select response from dialogue_item where item_id = $1",
+    text: "select response, dialogue_group from dialogue_item where item_id = $1",
     values: [item_id],
   });
   if (rows.length == 0) {
     throw new DialogueItemNotFoundError(item_id);
   }
   let reply = rows[0].response;
+  let group_id = rows[0].dialogue_group;
   return {
     reply,
     phrasings: await fetchDialogueItemPhrasings(item_id, db),
     path: await traceDialogueItemPath(item_id, db),
+    group_id,
   };
 }
 
@@ -291,4 +293,8 @@ export async function tracePrevReplyMsgDialoguePath(message_id: string, db: DBCl
     return await traceDialogueItemPath(row.best_match_item_id, db);
   }
   return null;
+}
+
+export async function fetchDialogueChildren(item_id: string, db: DBClient): Promise<DialoguePathElement[]> {
+  throw new Error("Not implemented");
 }

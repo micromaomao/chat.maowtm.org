@@ -6,7 +6,7 @@ import { APIError, APIValidationError, requireAdminAuth } from "../basic";
 import client_tags from "db/client_tag";
 import { withDBClient, Client as DBClient } from "db/index";
 import { MsgType } from "db/enums";
-import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchMessageEditedDialogueItem, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
+import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
 import { DialogueItemInput, InspectLastEditResult } from "./types";
 
 const apiRouter = Router();
@@ -124,6 +124,20 @@ apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {
     }
   });
   res.status(204).send();
+});
+
+apiRouter.get("/dialogue-item/:item_id", async (req, res) => {
+  const item_id = req.params.item_id;
+  let ret = await withDBClient(async db => {
+    let item_data = await fetchDialogueItem(item_id, db);
+    let children = await fetchDialogueChildren(item_id, db);
+    return {
+      id: item_id,
+      item_data,
+      children
+    };
+  });
+  res.json(ret);
 });
 
 export default apiRouter;
