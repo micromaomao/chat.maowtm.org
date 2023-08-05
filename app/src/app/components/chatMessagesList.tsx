@@ -5,6 +5,7 @@ import { Button, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentu
 import { Edit16Filled, Edit16Regular, ErrorCircle20Regular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
+import { useSharedState } from "app/utils/sharedstate";
 
 const MessageEditComponent = React.lazy(() => import("./messageEdit"));
 
@@ -107,7 +108,7 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 }
 
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
-  const [editingMsg, setEditingMsg] = useState<string | null>(null);
+  const [editingMsg, setEditingMsg] = useSharedState<string | null>(`ChatMessageList.editing`, null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
   const msg_edit_suspense = (
     <Skeleton>

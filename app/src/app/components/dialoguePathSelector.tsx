@@ -2,14 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as classes from "./dialoguePathSelector.module.css";
 import { AdminService, DialogueItemDetails, DialoguePathElement, MetadataDialoguePath } from "app/openapi";
 import { Combobox, Option, OptionOnSelectData } from "@fluentui/react-combobox";
-import { fetchDialogueItem } from "app/utils/dialogueItemData";
-import { ErrorCircleRegular, List20Regular } from "@fluentui/react-icons";
+import { fetchDialogueItem, fetchRootItems } from "app/utils/dialogueItemData";
+import { ErrorCircleRegular, List16Regular, List20Regular } from "@fluentui/react-icons";
 import { Text } from "@fluentui/react-components";
 
 interface P {
   initialPath: MetadataDialoguePath;
   initialIsCreate: boolean;
-  onChange?: (newItemId: string | null, is_create: boolean) => void;
+  onChange?: (is_create: boolean, item_or_parent_id: string) => void;
+  reset: any;
 }
 
 interface RowP {
@@ -33,23 +34,6 @@ function optionToString(opt: OptionElement): string {
   }
   return opt.dialogue_id;
 }
-function optionToDisplayString(opt: OptionElement): string {
-  if (typeof opt == "string") {
-    switch (opt) {
-      case OptionElementSpecial.CREATE_UNDER_PARENT:
-        return "(create new child)";
-      case OptionElementSpecial.UPDATE_PARENT:
-        return "(update this item)";
-      case OptionElementSpecial.LOADING:
-        return "(loading siblings...)";
-      default:
-        throw new Error("unreachable");
-    }
-  } else {
-    return opt.canonical_phrasing_text;
-  }
-}
-
 function Row({ current_item_or_special, has_update_parent_option, depth, parent_id, onSelect }: RowP) {
   const indent = Math.round(Math.pow(depth * 60, 0.8));
   let item: DialoguePathElement = null;
@@ -59,6 +43,31 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
 
   const [error, setError] = useState<Error>(null);
   const [siblings, setSiblings] = useState<DialoguePathElement[]>(null);
+
+  const optionToDisplayString = useMemo(() => {
+    return (opt: OptionElement): string => {
+      if (typeof opt == "string") {
+        switch (opt) {
+          case OptionElementSpecial.CREATE_UNDER_PARENT:
+            if (depth == 0) {
+              return "(create new item)";
+            }
+            return "(create new child)";
+          case OptionElementSpecial.UPDATE_PARENT:
+            return "(update this item)";
+          case OptionElementSpecial.LOADING:
+            if (depth == 0) {
+              return "(loading items...)"
+            }
+            return "(loading siblings...)";
+          default:
+            throw new Error("unreachable");
+        }
+      } else {
+        return opt.canonical_phrasing_text;
+      }
+    };
+  }, [depth])
 
   useEffect(() => {
     setSiblings(null);
@@ -73,7 +82,7 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
         setError(err);
       });
     } else {
-      AdminService.getListDialogueItems().then(data => {
+      fetchRootItems().then(data => {
         if (cancelled) return;
         let list: DialoguePathElement[] = [];
         for (let g of data.groups) {
@@ -159,13 +168,13 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
   return (
     <div className={classes.row} style={{ paddingLeft: `${indent}px` }}>
       <div className={classes.icon}>
-        {item ? (
-          <List20Regular />
+        {(item || depth == 0) ? (
+          <List16Regular />
         ) : null}
       </div>
       <div>
         <Combobox
-          size="large"
+          size="medium"
           multiselect={false}
           onOptionSelect={handleOptionSelect}
           onInput={handleInput}
@@ -203,29 +212,45 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
   );
 }
 
-export default function DialoguePathSelectorComponent({ initialPath, initialIsCreate, onChange }: P) {
+export default function DialoguePathSelectorComponent({ initialPath, initialIsCreate, onChange, reset }: P) {
   let [path, setPath] = useState<MetadataDialoguePath>(initialPath);
   let [isCreate, setIsCreate] = useState<boolean>(initialIsCreate);
+
+  useEffect(() => {
+    setPath(initialPath);
+    setIsCreate(initialIsCreate);
+  }, [reset]);
 
   if (!path) {
     path = [];
   }
 
   function handleOnSelect(path_index: number, new_item_or_special: OptionElement) {
+    let new_path = path;
+    let new_is_create = isCreate;
     if (typeof new_item_or_special == "string") {
-      setPath(path.slice(0, path_index));
+      new_path = path.slice(0, path_index);
+      setPath(new_path);
       switch (new_item_or_special) {
         case OptionElementSpecial.CREATE_UNDER_PARENT:
-          setIsCreate(true);
+          new_is_create = true;
+          setIsCreate(new_is_create);
           break;
         case OptionElementSpecial.UPDATE_PARENT:
-          setIsCreate(false);
+          new_is_create = false;
+          setIsCreate(new_is_create);
           break;
       }
     } else {
-      path[path_index] = new_item_or_special;
-      setPath(path.slice(0, path_index + 1));
-      setIsCreate(true);
+      new_path = path.slice(0, path_index + 1);
+      new_path[path_index] = new_item_or_special;
+      setPath(new_path);
+      new_is_create = false;
+      setIsCreate(new_is_create);
+    }
+    if (onChange) {
+      let path = new_path;
+      onChange(new_is_create, path.length > 0 ? path[path.length - 1].dialogue_id : null);
     }
   }
 

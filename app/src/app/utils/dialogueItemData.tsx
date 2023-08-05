@@ -1,8 +1,10 @@
-import { AdminService, ApiError, DialogueItemDetails } from "app/openapi";
+import { AdminService, ApiError, DialogueItemDetails, ListDialogueItemsResult } from "app/openapi";
 import { useEffect, useState } from "react";
 
 const pendingPromise: Map<string, Promise<DialogueItemDetails>> = new Map();
 const cache: Map<string, DialogueItemDetails> = new Map();
+
+let rootItemsPromise: Promise<ListDialogueItemsResult> | null = null;
 
 export function fetchDialogueItem(id: string): Promise<DialogueItemDetails> {
   if (cache.has(id)) {
@@ -26,14 +28,6 @@ export function fetchDialogueItem(id: string): Promise<DialogueItemDetails> {
   return promise;
 }
 
-export function useDialogueItemData(id: string | null): [Error, DialogueItemDetails] {
-  const [data, setData] = useState<DialogueItemDetails>(null);
-  const [error, setError] = useState(null);
-
-
-  return [error, data];
-}
-
 export function mutateDialogueGroup(group_id: string) {
   let keys = Array.from(cache.keys());
   for (let key of keys) {
@@ -41,5 +35,21 @@ export function mutateDialogueGroup(group_id: string) {
     if (ent && ent.item_data.group_id == group_id) {
       cache.delete(key);
     }
+  }
+  rootItemsPromise = null;
+}
+
+export function fetchRootItems() {
+  if (rootItemsPromise) {
+    return rootItemsPromise;
+  } else {
+    rootItemsPromise = AdminService.getListDialogueItems().then(res => res, err => {
+      if (err instanceof ApiError) {
+        err = new Error(err.body);
+      }
+      rootItemsPromise = null;
+      throw err;
+    });
+    return rootItemsPromise;
   }
 }

@@ -9,7 +9,7 @@
   display: grid;
   grid-template-columns: 20px 1fr;
   grid-template-rows: auto auto;
-  column-gap: 6px;
+  column-gap: 2px;
   align-items: center;
 }
 
