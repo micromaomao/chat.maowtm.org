@@ -148,7 +148,7 @@ export class DialogueMatcher {
    * and construct the minimum set of dialogue trees that cover all the given
    * items up to the token limit.
    */
-  itemsToTrees(item_matches: ItemMatchResult[], token_limit: number): ItemsMatchTree[] {
+  itemsToTrees(item_matches: ItemMatchResult[], token_limit: number): { trees: ItemsMatchTree[], all_nodes: ItemsMatchTree[] } {
     let trees: ItemsMatchTree[] = [];
     let item_id_to_treenode: Map<string, ItemsMatchTree> = new Map();
     let total_tokens = 0;
@@ -226,7 +226,7 @@ export class DialogueMatcher {
 
     trees.sort((a, b) => b.max_score - a.max_score);
 
-    return trees;
+    return { trees, all_nodes: Array.from(item_id_to_treenode.values()) };
   }
 
   /**
@@ -283,20 +283,33 @@ export class DialogueMatcher {
       }
     }
 
-    let trees = this.itemsToTrees(item_matches, sample_token_limit);
+    let { trees, all_nodes } = this.itemsToTrees(item_matches, sample_token_limit);
     let model_input: SampleInputLine[] = [];
 
+    let phrasing_q_text_cache = new Map<string, string>();
+    let item_response_cache = new Map<string, string>();
+
+    let all_phrasing_ids = all_nodes.map(x => x.selected_phrasing.phrasing_id);
+    let all_item_ids = all_nodes.map(x => x.this_item.dialogue_item_id);
+
+    let { rows } = await db.query({
+      text: "select id, q_text from dialogue_phrasing where id = any($1)",
+      values: [all_phrasing_ids]
+    });
+    for (let row of rows) {
+      phrasing_q_text_cache.set(row.id, row.q_text);
+    }
+    ({ rows } = await db.query({
+      text: "select item_id, response from dialogue_item where item_id = any($1)",
+      values: [all_item_ids]
+    }));
+    for (let row of rows) {
+      item_response_cache.set(row.item_id, row.response);
+    }
+
     async function dfs(node: ItemsMatchTree) {
-      let { rows: [res] } = await db.query({
-        text: "select q_text from dialogue_phrasing where id = $1",
-        values: [node.selected_phrasing.phrasing_id]
-      })
-      model_input.push({ role: "user", text: res.q_text });
-      ({ rows: [res] } = await db.query({
-        text: "select response from dialogue_item where item_id = $1",
-        values: [node.this_item.dialogue_item_id]
-      }));
-      model_input.push({ role: "bot", text: res.response });
+      model_input.push({ role: "user", text: phrasing_q_text_cache.get(node.selected_phrasing.phrasing_id) });
+      model_input.push({ role: "bot", text: item_response_cache.get(node.this_item.dialogue_item_id) });
 
       let first = true;
       for (let child of node.children) {
