@@ -36,3 +36,11 @@
 .excludedMsg .box {
   opacity: 0.5;
 }
+
+.phantomButtons {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: center;
+  padding: 0 5px;
+}

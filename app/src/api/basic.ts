@@ -1,5 +1,5 @@
 import { FetchedChatSession, fetchChatSession } from "lib/chat";
-import { strToHashBuf } from "lib/secure_token";
+import { strToHashBuf } from "lib/secure_token/nodejs";
 import { Client as DBClient, withDBClient } from "db/index";
 
 export class APIError extends Error {

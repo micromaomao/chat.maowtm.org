@@ -6,10 +6,14 @@ import { useChatCredentials } from 'app/utils/credentials';
 
 interface P {
   chat_id: string;
+  suggestions: string[];
+  onSend: (message: string) => void;
+  show_shadow?: boolean;
 }
 
-export default function MessageInputBox({ chat_id }: P) {
+export default function MessageInputBox({ chat_id, suggestions, onSend, show_shadow }: P) {
   const chat_token = useChatCredentials(chat_id);
+  const can_reply = !!chat_token;
   const [text, setText] = React.useState(chat_token ? "" : "Can't add message to this chat.")
   function handleChange(_, data) {
     let text = data.value;
@@ -23,18 +27,61 @@ export default function MessageInputBox({ chat_id }: P) {
     char_count_style = { color: "#aaa" };
   }
   let sendDisabled = false;
-  if (text.length === 0 || text.length > max_length || !chat_token) {
+  if (text.length === 0 || text.length > max_length || !can_reply) {
     sendDisabled = true;
   }
+
+  function handleSend() {
+    if (sendDisabled) {
+      return;
+    }
+    onSend(text);
+    setText("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key == "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
   return (
-    <div className={classes.container}>
+    <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "")}>
+      <div className={classes.suggestionRow}>
+        {suggestions.map(sugg => {
+          function handleSelect() {
+            if (text == sugg) {
+              handleSend();
+            } else {
+              setText(sugg);
+            }
+          }
+          return (
+            <Button
+              appearance="outline"
+              shape="rounded"
+              key={sugg}
+              disabled={!can_reply}
+              onClick={handleSelect}
+            >{sugg}</Button>
+          );
+        })}
+      </div>
       <div className={classes.textRow}>
-        <Textarea className={classes.textarea} value={text} onChange={handleChange} size="large" disabled={!chat_token} />
+        <Textarea
+          className={classes.textarea}
+          value={text}
+          onChange={handleChange}
+          size="large"
+          disabled={!can_reply}
+          onKeyDown={handleKeyDown}
+        />
       </div>
       <div className={classes.sendRow}>
-        {chat_token ? <Caption1 style={char_count_style}>{text.length}/{max_length}</Caption1> : null}
+        {can_reply ? <Caption1 style={char_count_style}>{text.length}/{max_length}</Caption1> : null}
         <div style={{ margin: "0 auto 0 auto" }} />
-        <Button appearance="transparent" icon={<SendFilled />} disabled={sendDisabled} aria-label="Send" title="Send" />
+        <Button appearance="transparent" icon={<SendFilled />} disabled={sendDisabled} aria-label="Send" title="Send" onClick={handleSend} />
       </div>
     </div>
   )

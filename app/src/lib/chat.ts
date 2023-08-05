@@ -6,7 +6,7 @@ import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v
 import { MsgType } from "db/enums";
 import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
-import { generateToken } from "./secure_token";
+import { generateToken } from "./secure_token/nodejs";
 import { startBackgroundGenerateResponseTask } from "./gen_response";
 import { MatchDialogueResult } from "./match_dialogue";
 

@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from "crypto";
+import { TOKEN_LENGTH, TOKEN_PREFIX } from "./shared";
+export { TOKEN_LENGTH, TOKEN_PREFIX };
 
-export const TOKEN_PREFIX = "sk_";
-const TOKEN_LENGTH = 24;
 /**
  * Generate a secure token, returning the string that should be provided to the
  * user, and a buffer containing a secure hash of the token.

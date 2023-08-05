@@ -1,14 +1,15 @@
 import React, { RefObject } from "react";
 import { getCredentialManager, subscribe as credentialsSubscribe } from "app/utils/credentials";
-import { DefaultService as API, ChatSession, ChatSuggestions, Message } from "app/openapi"
+import { DefaultService as API, ChatSession, ChatSuggestions, DefaultService, Message, MessageType } from "app/openapi"
 import ChatSkeleton from "app/components/chatSkeleton";
 import StartNewChatButton from "./startNewChatButton";
 import * as classes from "./chatController.module.css"
 import { Button } from "@fluentui/react-components";
 import { Alert } from "@fluentui/react-components/unstable";
-import ChatMessagesList from "./chatMessagesList";
+import ChatMessagesList, { PhantomMessage, PhantomMessageComponent } from "./chatMessagesList";
 import AutoScrollComponent from "./autoScroll";
 import MessageInputBox from "./messageInputBox";
+import { generateToken } from "lib/secure_token/browser";
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
@@ -36,6 +37,7 @@ interface S {
   no_permission: boolean;
   scrolling_to_bottom: boolean;
   suggestions: ChatSuggestions | null;
+  inTransitMessages: PhantomMessage[];
 }
 
 interface P {
@@ -49,6 +51,7 @@ const InitialState: S = {
   no_permission: false,
   scrolling_to_bottom: true,
   suggestions: null,
+  inTransitMessages: [],
 };
 
 export class ChatController extends React.Component<P, S> {
@@ -67,6 +70,9 @@ export class ChatController extends React.Component<P, S> {
     this.forceUpdate = this.forceUpdate.bind(this);
 
     this.unsubscribeCredentials = credentialsSubscribe(this.forceUpdate);
+    this.setUserScrollState = this.setUserScrollState.bind(this);
+    this.handleSendMessage = this.handleSendMessage.bind(this);
+    this.handleSendPhantom = this.handleSendPhantom.bind(this);
   }
 
   componentDidMount() {
@@ -94,7 +100,6 @@ export class ChatController extends React.Component<P, S> {
 
   updateMessage(message: Message) {
     const messages = this.state.messages;
-
     const insert_loc = messages.findIndex(m => m.id >= message.id);
     if (insert_loc == -1) {
       messages.push(message);
@@ -104,8 +109,15 @@ export class ChatController extends React.Component<P, S> {
       messages.splice(insert_loc, 0, message);
     }
 
+    const inTransitMessages = this.state.inTransitMessages;
+    let idx = inTransitMessages.findIndex(m => m.client_tag === message.client_tag);
+    if (idx != -1) {
+      inTransitMessages.splice(idx, 1);
+    }
+
     this.setState({
       messages: messages,
+      inTransitMessages: inTransitMessages,
     });
   }
 
@@ -236,6 +248,20 @@ export class ChatController extends React.Component<P, S> {
     this.initialize();
   }
 
+  setUserScrollState(at_bottom: boolean) {
+    this.setState({ scrolling_to_bottom: at_bottom });
+  }
+
+  get curr_input_suggestions(): string[] {
+    if (!this.state.suggestions || this.state.messages.length == 0) {
+      return [];
+    }
+    if (this.state.messages[this.state.messages.length - 1].id != this.state.suggestions.reply_msg) {
+      return [];
+    }
+    return this.state.suggestions.suggestions;
+  }
+
   render(): React.ReactNode {
     return (
       <div className={classes.container}>
@@ -246,8 +272,11 @@ export class ChatController extends React.Component<P, S> {
             ? ` ${classes.messageListContainerCenter}` : ` ${classes.messageListContainerJustifyBottom}`)
         }>
           {this.state.messages.length > 0 ? (
-            <AutoScrollComponent containerRef={this.containerRef}>
+            <AutoScrollComponent containerRef={this.containerRef} onUserScroll={this.setUserScrollState}>
               <ChatMessagesList messages_list={this.state.messages} enable_buttons={true} />
+              {this.state.inTransitMessages.map(msg => (
+                <PhantomMessageComponent key={msg.client_tag} message={msg} onRetry={this.handleSendPhantom} />
+              ))}
             </AutoScrollComponent>
           ) : (
             this.state.initial_loading ? (
@@ -267,8 +296,43 @@ export class ChatController extends React.Component<P, S> {
             </div>
           ) : null}
         </div>
-        <MessageInputBox chat_id={this.props.chat_id} />
+        <MessageInputBox
+          chat_id={this.props.chat_id}
+          suggestions={this.curr_input_suggestions}
+          show_shadow={!this.state.scrolling_to_bottom}
+          onSend={this.handleSendMessage}
+        />
       </div>
     );
+  }
+
+  async handleSendMessage(msg: string) {
+    let phantom: PhantomMessage = {
+      client_tag: (await generateToken()).token_str,
+      content: msg,
+      msg_type: MessageType.USER,
+      error: null,
+    };
+    this.state.inTransitMessages.push(phantom);
+    this.setState({
+      inTransitMessages: this.state.inTransitMessages,
+      suggestions: null,
+    });
+    try {
+      await this.handleSendPhantom(phantom);
+    } catch (e) {
+      phantom.error = e;
+      this.setState({
+        inTransitMessages: this.state.inTransitMessages,
+      });
+    }
+  }
+
+  async handleSendPhantom(phantom: PhantomMessage) {
+    await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
+      message: phantom.content,
+      client_tag: phantom.client_tag,
+    });
+    // Phantom will be automatically removed by SSE event.
   }
 }
