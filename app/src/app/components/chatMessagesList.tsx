@@ -1,7 +1,10 @@
+import React from "react";
 import { Message, MessageType } from "app/openapi";
 import classes from "./chatMessagesList.module.css"
 import { Button, Spinner, Text, Tooltip } from "@fluentui/react-components";
 import { Edit16Filled, Edit16Regular, ErrorCircle20Regular, ErrorCircleFilled } from "@fluentui/react-icons";
+import { useState } from "react";
+import MessageEditComponent from "./messageEdit";
 
 interface MessageComponentProps {
   message: Message;
@@ -59,7 +62,7 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
   const buttons = (
     <div className={classes.buttons + " " + classes.phantomButtons}>
       {message.error ? (
-        <Tooltip content={<>Failed to send: {message.error.message}<br />click to retry</>}>
+        <Tooltip content={<>Failed to send: {message.error.message}<br />click to retry</>} relationship="label">
           <Button size="small" appearance="transparent" icon={<ErrorCircle20Regular color="#d13438" />} onClick={() => onRetry(message)} />
         </Tooltip>
       ) : (
@@ -76,12 +79,23 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 }
 
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
+  const [editingMsg, setEditingMsg] = useState<string | null>(null);
   return (
     <>
       {messages_list.map((message) => {
-        const handleEdit = () => { };
+        const handleEdit = () => {
+          setEditingMsg(message.id);
+        };
+        const handleClose = () => {
+          setEditingMsg(null);
+        };
         return (
-          <MessageComponent key={message.id} message={message} handle_edit={enable_buttons ? handleEdit : undefined} />
+          <>
+            <MessageComponent key={message.id} message={message} handle_edit={enable_buttons ? handleEdit : undefined} />
+            {editingMsg === message.id ? (
+              <MessageEditComponent message_id={message.id} onClose={handleClose} />
+            ) : null}
+          </>
         );
       })}
     </>
