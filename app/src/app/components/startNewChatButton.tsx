@@ -6,7 +6,7 @@ import * as classes from "./startNewChatButton.module.css";
 import { ErrorCircleRegular } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 
-export default function StartNewChatButton() {
+export default function StartNewChatButton(props) {
   const [starting, setStarting] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const navigate = useNavigate();
@@ -28,7 +28,9 @@ export default function StartNewChatButton() {
       <Button
         onClick={handleClick}
         disabled={starting}
-        icon={starting ? <Spinner size="extra-tiny" /> : undefined}>
+        icon={starting ? <Spinner size="extra-tiny" /> : undefined}
+        {...props}
+      >
         Start new chat
       </Button>
       {error ? (<div className={classes.error}>
