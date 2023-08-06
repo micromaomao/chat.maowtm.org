@@ -1,0 +1,30 @@
+name: Build docker containers
+on:
+  push:
+    branches: main
+jobs:
+  docker-build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build OpenAI gateway service
+        run: |
+          set -e
+          cd openai-bridge
+          docker build . -t ghcr.io/${{ github.repository }}/openai-bridge:latest
+      - name: Build main service
+        run: |
+          set -e
+          cd app
+          docker build . -t ghcr.io/${{ github.repository }}/app:latest
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push
+        run: |
+          set -e
+          docker push ghcr.io/${{ github.repository }}/openai-bridge:latest
+          docker push ghcr.io/${{ github.repository }}/app:latest
