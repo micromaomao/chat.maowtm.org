@@ -18,6 +18,7 @@ jobs:
       - name: Build main service
         run: |
           set -e
+          cp api.json app/
           cd app
           docker build . -t ghcr.io/${{ github.repository }}/app:${{ github.sha }}
       - name: Login to GitHub Container Registry
