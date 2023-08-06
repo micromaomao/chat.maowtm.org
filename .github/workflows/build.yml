@@ -34,3 +34,4 @@ jobs:
             docker push ghcr.io/${{ github.repository }}/$image:${{ github.sha }}
             docker tag ghcr.io/${{ github.repository }}/$image:${{ github.sha }} ghcr.io/${{ github.repository }}/$image:latest
             docker push ghcr.io/${{ github.repository }}/$image:latest
+          done
