@@ -169,8 +169,6 @@ export async function newChatSssion(db?: DBClient): Promise<NewChatSessionResult
   }
 }
 
-console.log(APIError);
-
 export class ChatMessageNotFoundError extends APIError {
   constructor(message_id: string) {
     super(404, `Chat message ${message_id} not found`);
