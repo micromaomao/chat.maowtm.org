@@ -445,3 +445,16 @@ export class DialogueMatcher {
     return self;
   }
 }
+
+let cached_matcher: DialogueMatcher | null = null;
+
+export async function getCachedMatcher(): Promise<DialogueMatcher> {
+  if (cached_matcher === null) {
+    cached_matcher = await withDBClient(db => DialogueMatcher.fromDatabase(db));
+  }
+  return cached_matcher;
+}
+
+export function deleteCachedMatcher() {
+  cached_matcher = null;
+}

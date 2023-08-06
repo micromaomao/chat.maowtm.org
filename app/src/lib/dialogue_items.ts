@@ -4,6 +4,7 @@ import { Client as DBClient, withDBClient } from "../db/index";
 import getConfigStore from "db/config";
 import { APIError } from "../api/basic";
 import { ListDialogueItemsResult } from "app/openapi";
+import { deleteCachedMatcher } from "./match_dialogue";
 
 export class DialogueItemNotFoundError extends APIError {
   constructor(item_id: string) {
@@ -233,11 +234,13 @@ export async function _editMsgCommitEditLog(message_id: string, edited_item_id: 
 export async function editMsgAddNewChild(message_id: string, parent_id: string | null, dialogue_item_data: DialogueItemInput, db: DBClient): Promise<void> {
   const new_item_id = await newDialogueItem(dialogue_item_data, parent_id, db);
   await _editMsgCommitEditLog(message_id, new_item_id, db);
+  deleteCachedMatcher();
 }
 
 export async function editMsgUpdateDialogueItem(message_id: string, item_id: string, dialogue_item_data: DialogueItemInput, db: DBClient): Promise<void> {
   await updateDialogueItem(item_id, dialogue_item_data, db);
   await _editMsgCommitEditLog(message_id, item_id, db);
+  deleteCachedMatcher();
 }
 
 export async function fetchMessageEditedDialogueItem(message_id: string, db: DBClient): Promise<FetchedDialogueItemData | null> {

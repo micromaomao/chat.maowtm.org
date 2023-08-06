@@ -4,7 +4,7 @@ import { Client as DBClient, withDBClient } from "db/index";
 import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
 import { ChatHistoryInputLine, LLMBase, LLMChatCompletionInput } from "./llm/base";
-import { MatchDialogueResult, DialogueMatcher } from "./match_dialogue";
+import { MatchDialogueResult, DialogueMatcher, getCachedMatcher } from "./match_dialogue";
 import { NewChatSuggestionEvent, extractSuggestions, fetchSuggestions, setMessageSuggestions } from "./chat_suggestions";
 
 let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
@@ -48,13 +48,13 @@ export class GenerationTask {
   last_message_id: string;
   src_message_evt: NewChatMessageEvent;
   session_id: string;
+  dialogue_matcher: DialogueMatcher;
 
-  dialogue_matcher: DialogueMatcher | null = null;
-
-  constructor(msg_evt: NewChatMessageEvent) {
+  constructor(msg_evt: NewChatMessageEvent, dialogue_matcher: DialogueMatcher) {
     this.last_message_id = msg_evt.id;
     this.src_message_evt = msg_evt;
     this.session_id = msg_evt.session_id;
+    this.dialogue_matcher = dialogue_matcher;
 
     this.abort_controller = new AbortController();
     if (session_id_to_generation_tasks.has(this.session_id)) {
@@ -89,14 +89,6 @@ export class GenerationTask {
     }
 
     try {
-      if (!this.dialogue_matcher) {
-        this.dialogue_matcher = await withDBClient(db => DialogueMatcher.fromDatabase(db))
-        // TODO: use a global cache for this
-        if (this.cancelled) {
-          return;
-        }
-      }
-
       await this.attemptReplyGeneration();
       if (this.cancelled) {
         return;
@@ -465,6 +457,7 @@ export async function startBackgroundGenerateResponseTask(message: NewChatMessag
   }
 
   if (should_start) {
-    new GenerationTask(message);
+    let matcher = await getCachedMatcher();
+    new GenerationTask(message, matcher);
   }
 }
