@@ -1,26 +1,7 @@
 import { FetchedChatSession, fetchChatSession } from "lib/chat";
 import { strToHashBuf } from "lib/secure_token/nodejs";
 import { Client as DBClient, withDBClient } from "db/index";
-
-export class APIError extends Error {
-  status;
-  constructor(status?: number, message?: string) {
-    super(message || "Unknown error");
-    this.status = status || 500;
-  }
-}
-
-export class AuthError extends APIError {
-  constructor() {
-    super(401, "Unauthorized");
-  }
-}
-
-export class InvalidChatSessionError extends APIError {
-  constructor() {
-    super(404, "Invalid chat ID or token");
-  }
-}
+import { APIError, AuthError, InvalidChatSessionError } from "./basics"
 
 export async function hasValidAdminAuth(req): Promise<boolean> {
   let authorization = req.get("Authorization");
@@ -101,10 +82,4 @@ export async function requireValidChatTokenOrAdmin(req, session_id: string, db?:
     session = await requireValidChatTokenAuth(req, session_id, db);
   }
   return session;
-}
-
-export class APIValidationError extends APIError {
-  constructor(message: string) {
-    super(400, message);
-  }
 }

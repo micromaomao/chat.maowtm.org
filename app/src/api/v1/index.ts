@@ -3,9 +3,10 @@ import * as OpenApiValidator from "express-openapi-validator";
 import apiSpec from "../../../../api.json";
 import adminRoutes from "./admin";
 import client_tags from "db/client_tag";
-import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages, newChatSssion, userNewChatPreCheck, userNewSessionPreCheck } from "lib/chat";
+import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages, findChatMessageSession, newChatSssion, rollbackChat, userNewChatPreCheck, userNewSessionPreCheck } from "lib/chat";
 import { withDBClient } from "db/index";
-import { InvalidChatSessionError, hasValidAdminAuth, requireValidChatTokenAuth, requireValidChatTokenOrAdmin } from "../basic"
+import { InvalidChatSessionError } from "../basics";
+import { hasValidAdminAuth, requireValidChatTokenAuth, requireValidChatTokenOrAdmin } from "../auth_basics";
 import { MsgType } from "db/enums";
 import getConfigStore from "db/config";
 import * as mq from "db/mq"
@@ -167,6 +168,16 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
   });
   res.status(200).type("text").send(msg.id);
 })
+
+apiRouter.post("/messages/:msg_id/rollback-chat", async (req, res) => {
+  const message_id = req.params.msg_id;
+  await withDBClient(async db => {
+    const session_id = await findChatMessageSession(message_id, db);
+    await requireValidChatTokenAuth(req, session_id, db);
+    await rollbackChat(session_id, message_id, db);
+  });
+  res.status(204).send();
+});
 
 apiRouter.use(adminRoutes);
 

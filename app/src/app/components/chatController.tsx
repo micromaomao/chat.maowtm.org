@@ -150,7 +150,9 @@ export class ChatController extends React.Component<P, S> {
     if (this.chat_token) {
       maybe_token = `chat_token=${encodeURIComponent(this.chat_token)}`;
     }
-    let sseEventSource = new EventSource(`/api/v1/chat-session/${encodeURIComponent(this.props.chat_id)}/stream?${maybe_token}`);
+    let sseEventSource = new EventSource(
+      `/api/v1/chat-session/${encodeURIComponent(this.props.chat_id)}/stream?${maybe_token}`
+    );
     this.sseEventSource = sseEventSource;
     const ssePingTimeout = () => {
       if (this.sseEventSource !== sseEventSource) {

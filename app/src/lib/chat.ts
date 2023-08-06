@@ -9,7 +9,7 @@ import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token/nodejs";
 import { startBackgroundGenerateResponseTask } from "./gen_response";
 import { MatchDialogueResult } from "./match_dialogue";
-import { APIError } from "../api/basic";
+import { APIError } from "../api/basics";
 
 export interface FetchLastChatMessagesOptions {
   session_id: string;
@@ -167,4 +167,32 @@ export async function newChatSssion(db?: DBClient): Promise<NewChatSessionResult
   return {
     session_id, chat_token: token_str,
   }
+}
+
+console.log(APIError);
+
+export class ChatMessageNotFoundError extends APIError {
+  constructor(message_id: string) {
+    super(404, `Chat message ${message_id} not found`);
+  }
+}
+
+export async function findChatMessageSession(message_id: string, db: DBClient): Promise<string> {
+  let { rows } = await db.query({
+    text: "select session from chat_message where id = $1",
+    values: [message_id],
+  });
+  if (rows.length == 0) {
+    throw new ChatMessageNotFoundError(message_id);
+  }
+  return rows[0].session;
+}
+
+export async function rollbackChat(session_id: string, first_message_id_to_exclude: string, db: DBClient): Promise<void> {
+  await db.query({
+    text: `
+      update chat_message set exclude_from_generation = true
+        where session = $1 and id >= $2`,
+    values: [session_id, first_message_id_to_exclude],
+  });
 }

@@ -2,7 +2,7 @@ import { MsgType } from "db/enums";
 import { DialogueItemInput, DialoguePath, DialoguePathElement, FetchedDialogueItemData } from "../api/v1/types";
 import { Client as DBClient, withDBClient } from "../db/index";
 import getConfigStore from "db/config";
-import { APIError } from "../api/basic";
+import { APIError } from "../api/basics";
 import { ListDialogueItemsResult } from "app/openapi";
 import { deleteCachedMatcher } from "./match_dialogue";
 

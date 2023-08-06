@@ -2,7 +2,7 @@ import express from "express";
 import api from "./api";
 import * as db from "./db";
 import { OpenAIError } from "./lib/llm/openai";
-import { APIError } from "./api/basic";
+import { APIError } from "./api/basics";
 import path from "path";
 
 (async () => {

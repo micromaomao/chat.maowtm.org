@@ -657,6 +657,52 @@
           }
         }
       }
+    },
+    "/messages/{msg_id}/rollback-chat": {
+      "post": {
+        "summary": "Roll back the chat to before this message was sent.",
+        "description": "Mark this and all following messages in this chat as \"excluded\", so that following chat replies will be generated as if those messages has not happened (effectively rolling back the chat, but preserving the history for user to see).\n\nRequires chat token to prevent accidental modification of user's chat from admins.",
+        "operationId": "",
+        "tags": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "chat_token",
+            "description": "",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {},
+        "responses": {
+          "204": {},
+          "401": {
+            "description": "Bad chat token",
+            "content": {}
+          },
+          "404": {
+            "description": "Bad message ID"
+          }
+        },
+        "security": [
+          {
+            "chatToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "msg_id",
+          "description": "Chat ID",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ]
     }
   },
   "components": {
