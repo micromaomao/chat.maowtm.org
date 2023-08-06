@@ -69,11 +69,12 @@ function Row({ selectedOption, hasUpdateParentOption, depth, parentId, onSelect 
   const [siblings, setSiblings] = useState<DialoguePathElement[]>(null);
   const [freeformValue, setFreeformValue] = useState<string>(selectedOptionDisplayString);
   const [searching, setSearching] = useState<boolean>(false);
-  const [validationError, setValidationError] = useState<string>(null);
 
   useEffect(() => {
     setSiblings(null);
     setError(null);
+    setFreeformValue(selectedOptionDisplayString);
+    setSearching(false);
     let cancelled = false;
     if (parentId) {
       fetchDialogueItem(parentId).then(data => {
@@ -100,6 +101,11 @@ function Row({ selectedOption, hasUpdateParentOption, depth, parentId, onSelect 
       cancelled = true;
     };
   }, [parentId]);
+
+  useEffect(() => {
+    setFreeformValue(selectedOptionDisplayString);
+    setSearching(false);
+  }, [selectedOption])
 
   const options = useMemo(() => {
     let arr: OptionElement[] = [OptionElementSpecial.CREATE_UNDER_PARENT];
@@ -149,9 +155,9 @@ function Row({ selectedOption, hasUpdateParentOption, depth, parentId, onSelect 
       return;
     }
     setSearching(false);
+    setFreeformValue(optionToDisplayString(opt, depth));
     if (onSelect) {
       onSelect(opt);
-      setFreeformValue(optionToDisplayString(opt, depth));
     }
   }
 
@@ -165,6 +171,7 @@ function Row({ selectedOption, hasUpdateParentOption, depth, parentId, onSelect 
   function handleInput(evt: any) {
     let text = evt.target.value;
     setFreeformValue(text);
+    setSearching(true);
   }
 
   return (

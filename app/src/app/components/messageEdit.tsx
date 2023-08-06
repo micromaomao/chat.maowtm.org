@@ -127,6 +127,19 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
   return (
     <>
       <Field
+        label="Question phrasings"
+        hint="These are the phrases that the user might say to trigger this reply."
+        size="large"
+        validationState={phrasingValidationErr ? "error" : null}
+        validationMessage={phrasingValidationErr}
+      >
+        <PhrasingEditor
+          phrasings={phrasings}
+          onChange={setPhrasings}
+        />
+      </Field>
+      <br />
+      <Field
         label="Reply text"
         size="large"
         validationState={replyValidationErr ? "error" : null}
@@ -141,22 +154,9 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
             value={reply}
             onInput={handleReplyInput}
             size="large"
-            style={{ height: "100px" }}
+            style={{ height: "150px" }}
           />
         )}
-      </Field>
-      <br />
-      <Field
-        label="Question phrasings"
-        hint="These are the phrases that the user might say to trigger this reply."
-        size="large"
-        validationState={phrasingValidationErr ? "error" : null}
-        validationMessage={phrasingValidationErr}
-      >
-        <PhrasingEditor
-          phrasings={phrasings}
-          onChange={setPhrasings}
-        />
       </Field>
 
       <br />
