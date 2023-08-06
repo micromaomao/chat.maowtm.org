@@ -1,0 +1,18 @@
+.container br {
+  margin-bottom: 10px;;
+}
+
+.hidden {
+  transition: color 0.3s;
+  color: #eee;
+  background-color: #eee;
+}
+
+.hidden:hover {
+  color: var(--colorNeutralForeground1);
+}
+
+.hidden::selection {
+  color: var(--colorBrandBackground);
+  background-color: var(--colorBrandBackground);
+}

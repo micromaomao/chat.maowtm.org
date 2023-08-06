@@ -34,7 +34,9 @@ apiRouter.post("/chat-session", async (req, res) => {
     res.status(201).json(tag_entry.response);
     return;
   }
-  await userNewSessionPreCheck();
+  if (!await hasValidAdminAuth(req)) {
+    await userNewSessionPreCheck();
+  }
   const ret = await newChatSssion();
   await client_tags.setTag(client_tag, ret);
   res.status(201).json(ret);
@@ -148,7 +150,9 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
   let conf_store = await getConfigStore();
   let msg = await withDBClient(async db => {
     await requireValidChatTokenAuth(req, session_id, db);
-    await userNewChatPreCheck(session_id, db);
+    if (!await hasValidAdminAuth(req)) {
+      await userNewChatPreCheck(session_id, db);
+    }
     const content = req.body.message;
     let msg = await addChatMessage({
       session_id,

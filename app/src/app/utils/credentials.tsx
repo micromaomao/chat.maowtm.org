@@ -1,6 +1,8 @@
 import { useDebugValue, useEffect, useState, useSyncExternalStore } from "react";
+import { OpenAPI } from "app/openapi";
 
 const CREDENTIAL_MANAGER_LS_KEY = "credentials";
+const MAX_CHATS = 100;
 
 export class CredentialManager {
   private _admin_token: string | null = null;
@@ -14,9 +16,8 @@ export class CredentialManager {
       } catch (e) {
         console.error("Unable to deserialize credentials from local storage:", e)
       }
-    } else {
-      this.postStateUpdate();
     }
+    this.postStateUpdate();
   }
 
   serialize(): object {
@@ -37,6 +38,14 @@ export class CredentialManager {
 
   postStateUpdate() {
     window.localStorage.setItem(CREDENTIAL_MANAGER_LS_KEY, JSON.stringify(this.serialize()));
+    OpenAPI.CREDENTIALS = "same-origin";
+    if (this.admin_token) {
+      OpenAPI.HEADERS = {
+        "Authorization": `Bearer ${this._admin_token}`,
+      };
+    } else {
+      OpenAPI.HEADERS = {};
+    }
     for (let sub of this._subscribers) {
       sub();
     }
@@ -65,8 +74,8 @@ export class CredentialManager {
     } else {
       this._chat_tokens.sort((a, b) => a.chat_id.localeCompare(b.chat_id));
       this._chat_tokens.push({ chat_id, token });
-      if (this._chat_tokens.length > 10) {
-        this._chat_tokens.splice(0, this._chat_tokens.length - 10);
+      if (this._chat_tokens.length > MAX_CHATS) {
+        this._chat_tokens.splice(0, this._chat_tokens.length - MAX_CHATS);
       }
     }
     this.postStateUpdate();
@@ -78,6 +87,7 @@ export class CredentialManager {
 }
 
 let cred_manager: CredentialManager | null = null;
+
 if (typeof window != "undefined") {
   cred_manager = new CredentialManager();
 }

@@ -23,11 +23,41 @@ export class InvalidChatSessionError extends APIError {
 }
 
 export async function hasValidAdminAuth(req): Promise<boolean> {
-  // TODO
-  return (
-    process.env.NODE_ENV == "development" &&
-    ["::1", "127.0.0.1", "::ffff:127.0.0.1"].includes(req.ip) && !req.get("X-Forwarded-For")
-  );
+  let authorization = req.get("Authorization");
+  if (typeof authorization != "string" || !authorization) {
+    return false;
+  }
+  const start = "Bearer ";
+  if (!authorization.startsWith(start)) {
+    return false;
+  }
+  let token_str = authorization.slice(start.length);
+  let hash = strToHashBuf(token_str);
+  if (!hash) {
+    throw new APIError(400, "Invalid admin token");
+  }
+  return await withDBClient(async db => {
+    let { rows }: { rows: any[] } = await db.query({
+      text: "select expiry from admin_token where token = $1",
+      values: [hash],
+    });
+    if (rows.length == 0) {
+      return false;
+    }
+    if (rows[0].expiry.getTime() < Date.now()) {
+      try {
+        await db.query({
+          text: "delete from admin_token where token = $1",
+          values: [hash],
+        });
+      } catch (e) {
+        console.error("Unable to delete expired admin token", e);
+      }
+      return false;
+    } else {
+      return true;
+    }
+  });
 }
 
 export async function requireAdminAuth(req, res, next) {

@@ -184,3 +184,8 @@ create table chat_suggestion (
 
   primary key (reply_msg, suggestion)
 );
+
+create table admin_token (
+  token bytea not null primary key,
+  expiry timestamptz not null
+);

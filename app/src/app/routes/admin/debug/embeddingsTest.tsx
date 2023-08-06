@@ -8,6 +8,7 @@ import useSWRImmutable from "swr/immutable";
 
 import * as styles from "./embeddings.module.css";
 import { API_BASE } from "app/consts";
+import { AdminService, OpenAPI } from "app/openapi";
 
 const setBestMatchHighlightContext = createContext<any>(null);
 
@@ -118,7 +119,7 @@ class ResponseError extends Error {
   }
 }
 
-const fetcher = (key: string) => fetch(key, { headers: { "Accept": "application/json" } }).then(async res => {
+const fetcher = (key: string) => fetch(key, { headers: { "Accept": "application/json", ...OpenAPI.HEADERS } }).then(async res => {
   if (!res.ok) {
     if (res.headers.get("content-type")?.startsWith("text/plain")) {
       const text = await res.text();
