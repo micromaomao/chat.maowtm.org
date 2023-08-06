@@ -66,5 +66,9 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
 
 export function useAutoScrollUpdateSignal() {
   let signal = useContext(signalContext);
-  return () => signal({});
+  return () => {
+    if (signal) {
+      signal({});
+    }
+  };
 }

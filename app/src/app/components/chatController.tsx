@@ -1,6 +1,6 @@
 import React, { RefObject } from "react";
 import { getCredentialManager, subscribe as credentialsSubscribe } from "app/utils/credentials";
-import { DefaultService as API, ApiError, ChatSession, ChatSuggestions, DefaultService, Message, MessageType } from "app/openapi"
+import { DefaultService as API, ApiError, ChatSession, ChatSuggestions, DefaultService, Message, MessageType, OpenAPI } from "app/openapi"
 import ChatSkeleton from "app/components/chatSkeleton";
 import StartNewChatButton from "./startNewChatButton";
 import * as classes from "./chatController.module.css"
@@ -12,6 +12,7 @@ import MessageInputBox from "./messageInputBox";
 import { generateToken } from "lib/secure_token/browser";
 import { MaybeShowTyping } from "./typingAnimation";
 import { SharedStateProvider } from "app/utils/sharedstate";
+import { fetchEventSource } from "@microsoft/fetch-event-source"
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
@@ -69,7 +70,7 @@ export class ChatController extends React.Component<P, S> {
   containerRef: RefObject<HTMLDivElement>;
   unsubscribeCredentials: () => void;
 
-  sseEventSource: EventSource | null = null;
+  sseController: AbortController | null = null;
   ssePingTimeout: number | null = null;
 
   constructor(props: P) {
@@ -138,9 +139,9 @@ export class ChatController extends React.Component<P, S> {
       clearTimeout(this.ssePingTimeout);
       this.ssePingTimeout = null;
     }
-    if (this.sseEventSource) {
-      this.sseEventSource.close();
-      this.sseEventSource = null;
+    if (this.sseController) {
+      this.sseController.abort();
+      this.sseController = null;
     }
   }
 
@@ -150,14 +151,11 @@ export class ChatController extends React.Component<P, S> {
     if (this.chat_token) {
       maybe_token = `chat_token=${encodeURIComponent(this.chat_token)}`;
     }
-    let sseEventSource = new EventSource(
-      `/api/v1/chat-session/${encodeURIComponent(this.props.chat_id)}/stream?${maybe_token}`
-    );
-    this.sseEventSource = sseEventSource;
+    let abort_controller = new AbortController();
+    this.sseController = abort_controller;
+
     const ssePingTimeout = () => {
-      if (this.sseEventSource !== sseEventSource) {
-        return;
-      }
+      if (this.sseController !== abort_controller) return;
       console.error("Did not receive SSE ping for 10 seconds, re-opening a new connection...");
       this.startSSE().catch(err => {
         console.error("Failed to re-open SSE connection:", err);
@@ -165,55 +163,77 @@ export class ChatController extends React.Component<P, S> {
       });
     }
     const refreshSSEPingTimeout = () => {
-      if (this.sseEventSource !== sseEventSource) {
-        return;
-      }
+      if (this.sseController !== abort_controller) return;
       if (this.ssePingTimeout) {
         clearTimeout(this.ssePingTimeout);
       }
       this.ssePingTimeout = setTimeout(ssePingTimeout, 10000);
     };
-    sseEventSource.addEventListener("message", evt => {
-      refreshSSEPingTimeout();
-      let msg: Message = JSON.parse(evt.data);
-      this.updateMessage(msg);
-    });
-    sseEventSource.addEventListener("deleteMessage", evt => {
-      let id = evt.data;
-      let idx = this.state.messages.findIndex(m => m.id == id);
-      if (idx != -1) {
-        this.state.messages.splice(idx, 1);
-        this.setState({ messages: this.state.messages });
-      }
-    });
-    sseEventSource.addEventListener("suggestions", evt => {
-      let suggestions: ChatSuggestions = JSON.parse(evt.data);
-      this.setState({ suggestions: suggestions });
-    });
-    sseEventSource.addEventListener("ping", evt => {
-      refreshSSEPingTimeout();
-    });
+
+    let resolved = false;
+
     return new Promise((resolve, reject) => {
-      let resolved = false;
-      sseEventSource.addEventListener("open", evt => {
-        resolve();
-        resolved = true;
-        refreshSSEPingTimeout();
-      });
-      sseEventSource.addEventListener("error", evt => {
-        if (resolved) {
-          console.error("SEE connection closed unexpectedly.");
-          this.startSSE().catch(e => {
-            console.error("Unable to restart SSE connection.", e);
-            this.setState({
-              messages_error: new Error("Connection to server lost, latest messages may not be displayed.")
+      fetchEventSource(
+        `/api/v1/chat-session/${encodeURIComponent(this.props.chat_id)}/stream?${maybe_token}`,
+        {
+          method: "GET",
+          headers: { ...OpenAPI.HEADERS },
+          signal: abort_controller.signal,
+          openWhenHidden: true,
+          onopen: async (response) => {
+            if (this.sseController !== abort_controller) return;
+            if (resolved) return;
+            resolve();
+            resolved = true;
+            refreshSSEPingTimeout();
+            this.reloadMessages().then(() => {
+              this.setState({ messages_error: null });
             });
-          });
-          return;
+          },
+          onerror: (err) => {
+            if (this.sseController !== abort_controller) return;
+            if (resolved) {
+              console.error("SEE connection closed unexpectedly.");
+              this.startSSE().catch(e => {
+                console.error("Unable to restart SSE connection.", e);
+                this.setState({
+                  messages_error: new Error("Connection to server lost, latest messages may not be displayed.")
+                });
+              });
+            } else {
+              reject(new Error("Unable to start server-sent events connection: " + err.message, { cause: err }));
+              this.stopSSE();
+              throw err;
+            }
+          },
+          onmessage: (evt) => {
+            refreshSSEPingTimeout();
+            switch (evt.event) {
+              case "message":
+                let msg: Message = JSON.parse(evt.data);
+                this.updateMessage(msg);
+                break;
+              case "deleteMessage":
+                let id = evt.data;
+                let idx = this.state.messages.findIndex(m => m.id == id);
+                if (idx != -1) {
+                  this.state.messages.splice(idx, 1);
+                  this.setState({ messages: this.state.messages });
+                }
+                break;
+              case "suggestions":
+                let suggestions: ChatSuggestions = JSON.parse(evt.data);
+                this.setState({ suggestions: suggestions });
+                break;
+              case "ping":
+                break;
+              default:
+                console.error("Unknown SSE event:", evt.event, evt.data);
+                break;
+            }
+          },
         }
-        reject(new Error("Unable to start server-sent events connection."));
-        this.stopSSE();
-      });
+      );
     });
   }
 
@@ -249,6 +269,16 @@ export class ChatController extends React.Component<P, S> {
       });
       this.stopSSE();
     }
+  }
+
+  async reloadMessages() {
+    let data = await fetchChatData(this.props.chat_id);
+    for (let msg of data.messages) {
+      this.updateMessage(msg);
+    }
+    this.setState({
+      suggestions: data.last_suggestions,
+    });
   }
 
   unload() {
