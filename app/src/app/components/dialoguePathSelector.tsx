@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as classes from "./dialoguePathSelector.module.css";
 import { AdminService, DialogueItemDetails, DialoguePathElement, MetadataDialoguePath } from "app/openapi";
-import { Combobox, Option, OptionOnSelectData } from "@fluentui/react-combobox";
+import { Combobox, Option, OptionOnSelectData, ComboboxOpenChangeData } from "@fluentui/react-combobox";
 import { fetchDialogueItem, fetchRootItems } from "app/utils/dialogueItemData";
 import { ErrorCircleRegular, List16Regular, List20Regular } from "@fluentui/react-icons";
-import { Text } from "@fluentui/react-components";
+import { Field, Text } from "@fluentui/react-components";
 
 interface P {
   initialPath: MetadataDialoguePath;
@@ -13,11 +13,11 @@ interface P {
 }
 
 interface RowP {
-  current_item_or_special: OptionElement;
-  has_update_parent_option: boolean;
+  selectedOption: OptionElement;
+  hasUpdateParentOption: boolean;
   depth: number;
-  parent_id: string | null;
-  onSelect?: (new_item_or_special: OptionElement) => void;
+  parentId: string | null;
+  onSelect?: (newOption: OptionElement) => void;
 }
 
 enum OptionElementSpecial {
@@ -33,47 +33,50 @@ function optionToString(opt: OptionElement): string {
   }
   return opt.dialogue_id;
 }
-function Row({ current_item_or_special, has_update_parent_option, depth, parent_id, onSelect }: RowP) {
+function optionToDisplayString(opt: OptionElement, depth: number): string {
+  if (typeof opt == "string") {
+    switch (opt) {
+      case OptionElementSpecial.CREATE_UNDER_PARENT:
+        if (depth == 0) {
+          return "(create new item)";
+        }
+        return "(create new child)";
+      case OptionElementSpecial.UPDATE_PARENT:
+        return "(update this item)";
+      case OptionElementSpecial.LOADING:
+        if (depth == 0) {
+          return "(loading items...)"
+        }
+        return "(loading siblings...)";
+      default:
+        throw new Error("unreachable");
+    }
+  } else {
+    return opt.canonical_phrasing_text;
+  }
+}
+
+function Row({ selectedOption, hasUpdateParentOption, depth, parentId, onSelect }: RowP) {
   const indent = Math.round(Math.pow(depth * 60, 0.8));
   let item: DialoguePathElement = null;
-  if (typeof current_item_or_special != "string") {
-    item = current_item_or_special;
+  if (typeof selectedOption != "string") {
+    item = selectedOption;
   }
+
+  const selectedOptionDisplayString = optionToDisplayString(selectedOption, depth);
 
   const [error, setError] = useState<Error>(null);
   const [siblings, setSiblings] = useState<DialoguePathElement[]>(null);
-
-  const optionToDisplayString = useMemo(() => {
-    return (opt: OptionElement): string => {
-      if (typeof opt == "string") {
-        switch (opt) {
-          case OptionElementSpecial.CREATE_UNDER_PARENT:
-            if (depth == 0) {
-              return "(create new item)";
-            }
-            return "(create new child)";
-          case OptionElementSpecial.UPDATE_PARENT:
-            return "(update this item)";
-          case OptionElementSpecial.LOADING:
-            if (depth == 0) {
-              return "(loading items...)"
-            }
-            return "(loading siblings...)";
-          default:
-            throw new Error("unreachable");
-        }
-      } else {
-        return opt.canonical_phrasing_text;
-      }
-    };
-  }, [depth])
+  const [freeformValue, setFreeformValue] = useState<string>(selectedOptionDisplayString);
+  const [searching, setSearching] = useState<boolean>(false);
+  const [validationError, setValidationError] = useState<string>(null);
 
   useEffect(() => {
     setSiblings(null);
     setError(null);
     let cancelled = false;
-    if (parent_id) {
-      fetchDialogueItem(parent_id).then(data => {
+    if (parentId) {
+      fetchDialogueItem(parentId).then(data => {
         if (cancelled) return;
         setSiblings(data.children);
       }, err => {
@@ -96,13 +99,11 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
     return () => {
       cancelled = true;
     };
-  }, [parent_id]);
+  }, [parentId]);
 
-  const [freeformValue, setFreeformValue] = useState<string>(optionToDisplayString(current_item_or_special));
-  const [searching, setSearching] = useState<boolean>(false);
   const options = useMemo(() => {
     let arr: OptionElement[] = [OptionElementSpecial.CREATE_UNDER_PARENT];
-    if (has_update_parent_option) {
+    if (hasUpdateParentOption) {
       arr.push(OptionElementSpecial.UPDATE_PARENT);
     }
     if (siblings) {
@@ -114,7 +115,7 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
       }
     }
     return arr;
-  }, [siblings, item, has_update_parent_option, error]);
+  }, [siblings, item, hasUpdateParentOption, error]);
 
   function stringToOption(str: string): OptionElement | null {
     switch (str) {
@@ -150,13 +151,15 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
     setSearching(false);
     if (onSelect) {
       onSelect(opt);
-      setFreeformValue(optionToDisplayString(opt));
+      setFreeformValue(optionToDisplayString(opt, depth));
     }
   }
 
-  function handleBlur(evt: any) {
-    setFreeformValue(optionToDisplayString(current_item_or_special));
-    setSearching(false);
+  function handleOpenChange(evt: any, data: ComboboxOpenChangeData) {
+    if (!data.open) {
+      setFreeformValue(selectedOptionDisplayString);
+      setSearching(false);
+    }
   }
 
   function handleInput(evt: any) {
@@ -172,35 +175,37 @@ function Row({ current_item_or_special, has_update_parent_option, depth, parent_
         ) : null}
       </div>
       <div>
-        <Combobox
-          size="medium"
-          multiselect={false}
-          onOptionSelect={handleOptionSelect}
-          onInput={handleInput}
-          selectedOptions={[optionToString(current_item_or_special)]}
-          value={freeformValue}
-          style={{ width: "100%" }}
-          freeform={true}
-          onBlur={handleBlur}
-        >
-          {options.map(opt => {
-            if (searching) {
-              if (typeof opt == "string" && opt != OptionElementSpecial.CREATE_UNDER_PARENT) {
+        <Field>
+          <Combobox
+            size="medium"
+            multiselect={false}
+            onOptionSelect={handleOptionSelect}
+            onInput={handleInput}
+            selectedOptions={[optionToString(selectedOption)]}
+            value={freeformValue}
+            style={{ width: "100%" }}
+            freeform={true}
+            onOpenChange={handleOpenChange}
+          >
+            {options.map(opt => {
+              if (searching) {
+                if (typeof opt == "string" && opt != OptionElementSpecial.CREATE_UNDER_PARENT) {
+                  return null;
+                }
+              }
+              let strid = optionToString(opt);
+              let text = optionToDisplayString(opt, depth);
+              if (searching && typeof opt != "string" && text.toLowerCase().indexOf(freeformValue.toLowerCase()) == -1) {
                 return null;
               }
-            }
-            let strid = optionToString(opt);
-            let text = optionToDisplayString(opt);
-            if (searching && typeof opt != "string" && text.toLowerCase().indexOf(freeformValue.toLowerCase()) == -1) {
-              return null;
-            }
-            return (
-              <Option key={strid} value={strid} text={text} disabled={opt === OptionElementSpecial.LOADING}>
-                {typeof opt == "string" ? <i>{text}</i> : text}
-              </Option>
-            );
-          })}
-        </Combobox>
+              return (
+                <Option key={strid} value={strid} text={text} disabled={opt === OptionElementSpecial.LOADING}>
+                  {typeof opt == "string" ? <i>{text}</i> : text}
+                </Option>
+              );
+            })}
+          </Combobox>
+        </Field>
       </div>
       {error ? (
         <div className={classes.error}>
@@ -258,20 +263,20 @@ export default function DialoguePathSelectorComponent({ initialPath, initialIsCr
       {path.map((item, index) => (
         <Row
           key={index}
-          current_item_or_special={item}
+          selectedOption={item}
           depth={index}
-          has_update_parent_option={index > 0}
+          hasUpdateParentOption={index > 0}
           onSelect={handleOnSelect.bind(this, index)}
-          parent_id={index > 0 ? path[index - 1].dialogue_id : null}
+          parentId={index > 0 ? path[index - 1].dialogue_id : null}
         />
       ))}
       <Row
         key={path.length}
         depth={path.length}
-        has_update_parent_option={path.length > 0}
-        current_item_or_special={(isCreate || path.length == 0) ? OptionElementSpecial.CREATE_UNDER_PARENT : OptionElementSpecial.UPDATE_PARENT}
+        hasUpdateParentOption={path.length > 0}
+        selectedOption={(isCreate || path.length == 0) ? OptionElementSpecial.CREATE_UNDER_PARENT : OptionElementSpecial.UPDATE_PARENT}
         onSelect={handleOnSelect.bind(this, path.length)}
-        parent_id={path.length > 0 ? path[path.length - 1].dialogue_id : null}
+        parentId={path.length > 0 ? path[path.length - 1].dialogue_id : null}
       />
     </div>
   )
