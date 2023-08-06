@@ -6,6 +6,7 @@ jobs:
   docker-build-push:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write
     steps:
       - uses: actions/checkout@v2
@@ -13,12 +14,12 @@ jobs:
         run: |
           set -e
           cd openai-bridge
-          docker build . -t ghcr.io/${{ github.repository }}/openai-bridge:latest
+          docker build . -t ghcr.io/${{ github.repository }}/openai-bridge:${{ github.sha }}
       - name: Build main service
         run: |
           set -e
           cd app
-          docker build . -t ghcr.io/${{ github.repository }}/app:latest
+          docker build . -t ghcr.io/${{ github.repository }}/app:${{ github.sha }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
         with:
@@ -28,5 +29,7 @@ jobs:
       - name: Push
         run: |
           set -e
-          docker push ghcr.io/${{ github.repository }}/openai-bridge:latest
-          docker push ghcr.io/${{ github.repository }}/app:latest
+          for image in openai-bridge app; do
+            docker push ghcr.io/${{ github.repository }}/$image:${{ github.sha }}
+            docker tag ghcr.io/${{ github.repository }}/$image:${{ github.sha }} ghcr.io/${{ github.repository }}/$image:latest
+            docker push ghcr.io/${{ github.repository }}/$image:latest
