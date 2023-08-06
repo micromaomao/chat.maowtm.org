@@ -1,6 +1,6 @@
 import React from "react";
 import { ApiError, DefaultService, Message, MessageType } from "app/openapi";
-import classes from "./chatMessagesList.module.css"
+import * as classes from "./chatMessagesList.module.css"
 import { Button, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
 import { ArrowUndo16Regular, Edit16Filled, Edit16Regular, ErrorCircle20Regular } from "@fluentui/react-icons";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
