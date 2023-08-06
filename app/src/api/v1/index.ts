@@ -3,7 +3,7 @@ import * as OpenApiValidator from "express-openapi-validator";
 import apiSpec from "../../../../api.json";
 import adminRoutes from "./admin";
 import client_tags from "db/client_tag";
-import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages, newChatSssion } from "lib/chat";
+import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages, newChatSssion, userNewChatPreCheck, userNewSessionPreCheck } from "lib/chat";
 import { withDBClient } from "db/index";
 import { InvalidChatSessionError, hasValidAdminAuth, requireValidChatTokenAuth, requireValidChatTokenOrAdmin } from "../basic"
 import { MsgType } from "db/enums";
@@ -34,6 +34,7 @@ apiRouter.post("/chat-session", async (req, res) => {
     res.status(201).json(tag_entry.response);
     return;
   }
+  await userNewSessionPreCheck();
   const ret = await newChatSssion();
   await client_tags.setTag(client_tag, ret);
   res.status(201).json(ret);
@@ -147,10 +148,8 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
   let conf_store = await getConfigStore();
   let msg = await withDBClient(async db => {
     await requireValidChatTokenAuth(req, session_id, db);
+    await userNewChatPreCheck(session_id, db);
     const content = req.body.message;
-    // TODO: start transaction and:
-    //         check rate limit
-    //         check captcha
     let msg = await addChatMessage({
       session_id,
       msg_type: MsgType.User,

@@ -332,8 +332,19 @@ export class ChatController extends React.Component<P, S> {
       inTransitMessages: this.state.inTransitMessages,
       suggestions: null,
     });
+    await this.handleSendPhantom(phantom);
+  }
+
+  async handleSendPhantom(phantom: PhantomMessage) {
     try {
-      await this.handleSendPhantom(phantom);
+      await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
+        message: phantom.content,
+        client_tag: phantom.client_tag,
+      });
+      // Phantom will be automatically removed by SSE event.
+      this.setState({
+        typingExpiry: Date.now() + 8000,
+      });
     } catch (e) {
       phantom.error = e;
       this.setState({
@@ -341,16 +352,5 @@ export class ChatController extends React.Component<P, S> {
         typingExpiry: null,
       });
     }
-  }
-
-  async handleSendPhantom(phantom: PhantomMessage) {
-    await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
-      message: phantom.content,
-      client_tag: phantom.client_tag,
-    });
-    // Phantom will be automatically removed by SSE event.
-    this.setState({
-      typingExpiry: Date.now() + 8000,
-    });
   }
 }

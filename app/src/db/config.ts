@@ -29,6 +29,8 @@ export interface Config {
   generation_model: GenerationModel;
   init_messages: [MsgType, string][];
   prompt_template: string;
+  allow_new_session: boolean;
+  allow_new_chat: boolean;
 }
 
 export class ConfigStore {
@@ -55,6 +57,8 @@ export class ConfigStore {
         [MsgType.Bot, "Hi, nice to meet you!"],
       ],
       prompt_template: DEFAULT_PROMPT_TEMPLATE,
+      allow_new_session: true,
+      allow_new_chat: true,
     };
     return conf;
   }

@@ -9,6 +9,7 @@ import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token/nodejs";
 import { startBackgroundGenerateResponseTask } from "./gen_response";
 import { MatchDialogueResult } from "./match_dialogue";
+import { APIError } from "../api/basic";
 
 export interface FetchLastChatMessagesOptions {
   session_id: string;
@@ -79,6 +80,18 @@ export interface NewChatMessageReplyMetadata extends MatchDialogueResult {
   regen_of?: string;
 }
 
+export async function userNewChatPreCheck(session_id: string, db?: DBClient): Promise<void> {
+  if (!db) {
+    return await withDBClient(db => userNewChatPreCheck(session_id, db));
+  }
+  let conf = (await getConfigStore()).config;
+  if (!conf.allow_new_chat) {
+    throw new APIError(503, "The server has disabled new chat messages at this time.");
+  }
+  // TODO: check rate limit
+  // TODO: check captcha
+}
+
 export async function addChatMessage(message: NewChatMessage, db_client: DBClient): Promise<NewChatMessageEvent> {
   let conf = await getConfigStore();
   if (message.generation_model && message.nb_tokens === undefined && message.generation_model == conf.generation_model.model_name) {
@@ -125,6 +138,13 @@ export async function fetchChatSession(session_id: string, db: DBClient): Promis
     return null;
   }
   return rows[0] as FetchedChatSession;
+}
+
+export async function userNewSessionPreCheck(db?: DBClient): Promise<void> {
+  let conf = (await getConfigStore()).config;
+  if (!conf.allow_new_session) {
+    throw new APIError(503, "New sessions are not allowed at this time");
+  }
 }
 
 export async function newChatSssion(db?: DBClient): Promise<NewChatSessionResult> {
