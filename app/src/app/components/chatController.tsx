@@ -13,6 +13,7 @@ import { generateToken } from "lib/secure_token/browser";
 import { MaybeShowTyping } from "./typingAnimation";
 import { SharedStateProvider } from "app/utils/sharedstate";
 import { fetchEventSource } from "@microsoft/fetch-event-source"
+import { chatControllerContext } from "./contexts";
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
@@ -110,8 +111,12 @@ export class ChatController extends React.Component<P, S> {
     return getCredentialManager().admin_token;
   }
 
+  get session_id(): string {
+    return this.props.chat_id;
+  }
+
   updateMessage(message: Message) {
-    const messages = this.state.messages;
+    const messages = this.state.messages.slice();
     const insert_loc = messages.findIndex(m => m.id >= message.id);
     if (insert_loc == -1) {
       messages.push(message);
@@ -121,7 +126,7 @@ export class ChatController extends React.Component<P, S> {
       messages.splice(insert_loc, 0, message);
     }
 
-    const inTransitMessages = this.state.inTransitMessages;
+    const inTransitMessages = this.state.inTransitMessages.slice();
     let idx = inTransitMessages.findIndex(m => m.client_tag === message.client_tag);
     if (idx != -1) {
       inTransitMessages.splice(idx, 1);
@@ -217,8 +222,9 @@ export class ChatController extends React.Component<P, S> {
                 let id = evt.data;
                 let idx = this.state.messages.findIndex(m => m.id == id);
                 if (idx != -1) {
-                  this.state.messages.splice(idx, 1);
-                  this.setState({ messages: this.state.messages });
+                  let copy = this.state.messages.slice();
+                  copy.splice(idx, 1);
+                  this.setState({ messages: copy });
                 }
                 break;
               case "suggestions":
@@ -305,53 +311,6 @@ export class ChatController extends React.Component<P, S> {
     return this.state.suggestions.suggestions;
   }
 
-  render(): React.ReactNode {
-    return (
-      <SharedStateProvider sessionStorageId={`chat_${this.props.chat_id}`}>
-        <div className={classes.container}>
-          <div ref={this.containerRef} className={
-            classes.messageListContainer +
-            ((this.state.messages.length == 0 && this.state.messages_error ||
-              this.state.no_permission)
-              ? ` ${classes.messageListContainerCenter}` : ` ${classes.messageListContainerJustifyBottom}`)
-          }>
-            {this.state.messages.length > 0 ? (
-              <AutoScrollComponent containerRef={this.containerRef} onUserScroll={this.setUserScrollState}>
-                <ChatMessagesList messages_list={this.state.messages} enable_buttons={true} />
-                {this.state.inTransitMessages.map(msg => (
-                  <PhantomMessageComponent key={msg.client_tag} message={msg} onRetry={this.handleSendPhantom} />
-                ))}
-                <MaybeShowTyping expiryTime={this.state.typingExpiry} />
-              </AutoScrollComponent>
-            ) : (
-              this.state.initial_loading ? (
-                <>
-                  <ChatSkeleton />
-                  <ChatSkeleton skipFirstBotMsg={true} />
-                </>
-              ) : null
-            )}
-            {this.state.messages_error ? (
-              <ChatListError err={this.state.messages_error} onRetry={this.retryInitialLoad} />
-            ) : null}
-            {this.state.no_permission ? (
-              <div className={classes.noPermission}>
-                You do not have access to this chat.<br /><br />
-                <StartNewChatButton />
-              </div>
-            ) : null}
-          </div>
-          <MessageInputBox
-            chat_id={this.props.chat_id}
-            suggestions={this.curr_input_suggestions}
-            show_shadow={!this.state.scrolling_to_bottom}
-            onSend={this.handleSendMessage}
-          />
-        </div>
-      </SharedStateProvider >
-    );
-  }
-
   async handleSendMessage(msg: string) {
     let phantom: PhantomMessage = {
       client_tag: (await generateToken()).token_str,
@@ -385,4 +344,78 @@ export class ChatController extends React.Component<P, S> {
       });
     }
   }
+
+  handleMarkMessageEdited(message_id: string) {
+    let messages = this.state.messages.slice();
+    let idx = messages.findIndex(m => m.id == message_id);
+    if (idx != -1) {
+      messages[idx] = Object.assign({}, messages[idx]);
+      if (messages[idx].metadata) {
+        messages[idx].metadata.updated_before = true;
+      }
+      this.setState({ messages: messages });
+    }
+  }
+
+  handlePostRollbackChat(message_id: string) {
+    let messages = this.state.messages.slice();
+    let idx = messages.findIndex(m => m.id >= message_id);
+    if (idx != -1) {
+      for (let i = idx; i < messages.length; i++) {
+        messages[i] = Object.assign({}, messages[i]);
+        messages[i].exclude_from_generation = true;
+      }
+      this.setState({ messages: messages });
+    }
+  }
+
+  render(): React.ReactNode {
+    return (
+      <chatControllerContext.Provider value={this}>
+        <SharedStateProvider sessionStorageId={`chat_${this.props.chat_id}`}>
+          <div className={classes.container}>
+            <div ref={this.containerRef} className={
+              classes.messageListContainer +
+              ((this.state.messages.length == 0 && this.state.messages_error ||
+                this.state.no_permission)
+                ? ` ${classes.messageListContainerCenter}` : ` ${classes.messageListContainerJustifyBottom}`)
+            }>
+              {this.state.messages.length > 0 ? (
+                <AutoScrollComponent containerRef={this.containerRef} onUserScroll={this.setUserScrollState}>
+                  <ChatMessagesList messages_list={this.state.messages} enable_buttons={true} />
+                  {this.state.inTransitMessages.map(msg => (
+                    <PhantomMessageComponent key={msg.client_tag} message={msg} onRetry={this.handleSendPhantom} />
+                  ))}
+                  <MaybeShowTyping expiryTime={this.state.typingExpiry} />
+                </AutoScrollComponent>
+              ) : (
+                this.state.initial_loading ? (
+                  <>
+                    <ChatSkeleton />
+                    <ChatSkeleton skipFirstBotMsg={true} />
+                  </>
+                ) : null
+              )}
+              {this.state.messages_error ? (
+                <ChatListError err={this.state.messages_error} onRetry={this.retryInitialLoad} />
+              ) : null}
+              {this.state.no_permission ? (
+                <div className={classes.noPermission}>
+                  You do not have access to this chat.<br /><br />
+                  <StartNewChatButton />
+                </div>
+              ) : null}
+            </div>
+            <MessageInputBox
+              chat_id={this.props.chat_id}
+              suggestions={this.curr_input_suggestions}
+              show_shadow={!this.state.scrolling_to_bottom}
+              onSend={this.handleSendMessage}
+            />
+          </div>
+        </SharedStateProvider >
+      </chatControllerContext.Provider>
+    );
+  }
+
 }

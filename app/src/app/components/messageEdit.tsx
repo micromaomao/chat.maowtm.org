@@ -8,6 +8,7 @@ import { useAutoScrollUpdateSignal } from "./autoScroll";
 import DialoguePathSelectorComponent from "./dialoguePathSelector";
 import { useSharedState } from "app/utils/sharedstate";
 import { fetchDialogueItem, mutateDialogues } from "app/utils/dialogueItemData";
+import { useChatController } from "./contexts";
 
 interface FormP {
   updateId?: string | null;
@@ -90,6 +91,7 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
   const [submitError, setSubmitError] = useState<Error>(null);
 
   const autoScrollUpdate = useAutoScrollUpdateSignal();
+  const chatController = useChatController();
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -105,6 +107,7 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
       }
       await AdminService.putMessagesEditBot(message.id, req);
       setSubmitting(false);
+      chatController.handleMarkMessageEdited(message.id);
       mutateDialogues();
       onReset();
     } catch (e) {

@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { FluentProvider, BrandVariants, Theme, createLightTheme, createDarkTheme } from '@fluentui/react-components';
+import { FluentProvider, BrandVariants, Theme, createLightTheme, createDarkTheme, Toaster } from '@fluentui/react-components';
 
 import "./globals.css";
 import LoadingPage from './loadingPage';
@@ -44,6 +44,7 @@ function RootComponent() {
   return (
     <React.StrictMode>
       <FluentProvider theme={lightTheme}>
+        <Toaster />
         <Suspense fallback={<LoadingPage />}>
           <Routes />
         </Suspense>

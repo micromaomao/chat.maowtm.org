@@ -1,16 +1,19 @@
 import React from "react";
-import { Message, MessageType } from "app/openapi";
+import { ApiError, DefaultService, Message, MessageType } from "app/openapi";
 import classes from "./chatMessagesList.module.css"
 import { Button, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
-import { Edit16Filled, Edit16Regular, ErrorCircle20Regular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { ArrowUndo16Regular, Edit16Filled, Edit16Regular, ErrorCircle20Regular } from "@fluentui/react-icons";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
 import { useSharedState } from "app/utils/sharedstate";
+import { getCredentialManager, useChatCredentials } from "app/utils/credentials";
+import { useChatController } from "./contexts";
+import { useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-toast";
 
 const MessageEditComponent = React.lazy(() => import("./messageEdit"));
 
 interface MessageComponentProps {
   message: Message;
+  enable_buttons: boolean;
   handle_edit?: () => void;
   editing?: boolean;
 };
@@ -61,11 +64,35 @@ export function OrderBoxAndButtons({ message_type, box, buttons }) {
   )
 }
 
-export function MessageComponent({ message, handle_edit, editing }: MessageComponentProps) {
+export function MessageComponent({ message, enable_buttons, handle_edit, editing }: MessageComponentProps) {
   const box = getBox(message.content, message.msg_type, message.exclude_from_generation);
+  const chatController = useChatController();
+  const chatToken = useChatCredentials(chatController.session_id);
+  const toastController = useToastController();
+  const [rollingBack, setRollingBack] = React.useState(false);
+  async function handleRollback() {
+    try {
+      setRollingBack(true);
+      await DefaultService.postMessagesRollbackChat(message.id, chatToken);
+      setRollingBack(false);
+      chatController.handlePostRollbackChat(message.id);
+    } catch (e) {
+      setRollingBack(false);
+      if (e instanceof ApiError) {
+        e = new Error(e.body);
+      }
+      toastController.dispatchToast(
+        <Toast>
+          <ToastTitle>Failed to roll back message</ToastTitle>
+          <ToastBody>{e.toString()}</ToastBody>
+        </Toast>,
+        { intent: "error" }
+      );
+    }
+  }
   const buttons = (
     <div className={classes.buttons}>
-      {(handle_edit && message.msg_type == MessageType.BOT && message.metadata) ?
+      {(enable_buttons && handle_edit && message.msg_type == MessageType.BOT && message.metadata) ?
         <Button
           onClick={handle_edit}
           icon={message.metadata?.updated_before ? <Edit16Filled /> : <Edit16Regular />}
@@ -74,6 +101,16 @@ export function MessageComponent({ message, handle_edit, editing }: MessageCompo
           size="small"
         />
         : null}
+      {(enable_buttons && message.msg_type == MessageType.USER && !message.exclude_from_generation && chatToken) ? (
+        <Button
+          onClick={handleRollback}
+          icon={<ArrowUndo16Regular />}
+          appearance="transparent"
+          title="Rollback this and below message"
+          size="small"
+          disabled={rollingBack}
+        />
+      ) : null}
     </div>
   )
   return (
@@ -110,6 +147,7 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
   const [editingMsg, setEditingMsg] = useSharedState<string | null>(`ChatMessageList.editing`, null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
+  const canEdit = getCredentialManager().has_admin_auth;
   const msg_edit_suspense = (
     <Skeleton>
       <SkeletonItem />
@@ -142,7 +180,12 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
         }
         return (
           <React.Fragment key={message.id}>
-            <MessageComponent message={message} handle_edit={enable_buttons ? handleEdit : undefined} editing={editingCurrMsg} />
+            <MessageComponent
+              message={message}
+              handle_edit={(enable_buttons && canEdit) ? handleEdit : undefined}
+              editing={editingCurrMsg}
+              enable_buttons={enable_buttons}
+            />
             {editingCurrMsg ? (
               <React.Suspense fallback={msg_edit_suspense}>
                 <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} />
