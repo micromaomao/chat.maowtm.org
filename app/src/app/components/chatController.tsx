@@ -184,6 +184,7 @@ export class ChatController extends React.Component<P, S> {
     let resolved = false;
 
     return new Promise((resolve, reject) => {
+      refreshSSEPingTimeout();
       fetchEventSource(
         `/api/v1/chat-session/${encodeURIComponent(this.props.chat_id)}/stream?${maybe_token}`,
         {
