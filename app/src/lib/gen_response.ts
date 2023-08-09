@@ -461,3 +461,11 @@ export async function startBackgroundGenerateResponseTask(message: NewChatMessag
     new GenerationTask(message, matcher);
   }
 }
+
+export function cancelGenerationTask(session_id: string) {
+  let existing_gen_task = session_id_to_generation_tasks.get(session_id);
+  if (existing_gen_task) {
+    console.log(`Cancelling existing generation task for ${session_id}`);
+    existing_gen_task.cancel();
+  }
+}

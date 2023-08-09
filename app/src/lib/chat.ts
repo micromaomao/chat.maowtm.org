@@ -7,7 +7,7 @@ import { MsgType } from "db/enums";
 import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token/nodejs";
-import { startBackgroundGenerateResponseTask } from "./gen_response";
+import { cancelGenerationTask, startBackgroundGenerateResponseTask } from "./gen_response";
 import { MatchDialogueResult } from "./match_dialogue";
 import { APIError } from "../api/basics";
 
@@ -187,6 +187,7 @@ export async function findChatMessageSession(message_id: string, db: DBClient): 
 }
 
 export async function rollbackChat(session_id: string, first_message_id_to_exclude: string, db: DBClient): Promise<void> {
+  cancelGenerationTask(session_id);
   await db.query({
     text: `
       update chat_message set exclude_from_generation = true
