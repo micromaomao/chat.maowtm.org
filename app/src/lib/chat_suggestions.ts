@@ -63,7 +63,7 @@ interface ExtractSuggestionsRes {
 }
 
 export function extractSuggestions(message: string): ExtractSuggestionsRes {
-  let suggestions_list_regex = /(?<=^|\n|[.!?] ) *suggestion \d+:[\n ]*([^\n]+)(?=$|\n)/igd;
+  let suggestions_list_regex = /(?<=^ *|\n *|[.!?] +|[\uff01\uff1f\u3002] *)suggestion \d+:[\n ]*([^\n]+)(?=$|\n)/igd;
   let suggestions = [];
   let message_without_suggestions = message;
   let match: RegExpExecArray;
@@ -72,7 +72,7 @@ export function extractSuggestions(message: string): ExtractSuggestionsRes {
       message_without_suggestions = message.substring(0, match.index);
     }
     let m1 = match[1];
-    let m2 = m1.match(/([.!?] +)suggestion \d+:/id);
+    let m2 = m1.match(/([.!?] +|[\uff01\uff1f\u3002] *)suggestion \d+:/id);
     if (m2) {
       suggestions_list_regex.lastIndex = match.indices[1][0] + m2.index;
       m1 = m1.substring(0, m2.indices[1][1]);

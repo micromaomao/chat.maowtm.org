@@ -112,6 +112,28 @@ Suggestion 3: What are your hobbies?`,
       ],
       message_without_suggestions: "Hello, nice to meet you."
     },
+    {
+      msg: `你好！
+
+Suggestion 1: 你好吗？
+Suggestion 2: 你在做什么？
+Suggestion 3: 你有什么爱好？`,
+      suggestions: [
+        "你好吗？",
+        "你在做什么？",
+        "你有什么爱好？"
+      ],
+      message_without_suggestions: "你好！"
+    },
+    {
+      msg: `你好！Suggestion 1: 你好吗？Suggestion 2: 你在做什么？ Suggestion 3: 你有什么爱好？`,
+      suggestions: [
+        "你好吗？",
+        "你在做什么？",
+        "你有什么爱好？"
+      ],
+      message_without_suggestions: "你好！"
+    }
   ];
 
   for (let test_case of test_cases) {
