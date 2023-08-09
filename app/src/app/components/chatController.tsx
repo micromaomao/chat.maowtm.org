@@ -131,15 +131,18 @@ export class ChatController extends React.Component<P, S> {
     let idx = inTransitMessages.findIndex(m => m.client_tag == message.client_tag);
     if (idx != -1) {
       inTransitMessages.splice(idx, 1);
-      this.setState({
-        typingExpiry: null
-      });
     }
 
     this.setState({
       messages: messages,
       inTransitMessages: inTransitMessages
     });
+
+    if (message.msg_type == MessageType.BOT) {
+      this.setState({
+        typingExpiry: null
+      });
+    }
   }
 
   stopSSE() {
