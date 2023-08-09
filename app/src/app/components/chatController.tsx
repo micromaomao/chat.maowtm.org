@@ -168,6 +168,9 @@ export class ChatController extends React.Component<P, S> {
     const ssePingTimeout = () => {
       if (this.sseController !== abort_controller) return;
       console.error("Did not receive SSE ping for 10 seconds, re-opening a new connection...");
+      this.setState({
+        messages_error: new Error("Reestablishing connection to server...")
+      });
       this.startSSE().catch(err => {
         console.error("Failed to re-open SSE connection:", err);
         this.setState({ messages_error: new Error("Connection to server lost, latest messages may not be displayed.") });
