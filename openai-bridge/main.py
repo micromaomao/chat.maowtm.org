@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import logging
 from hashlib import sha256
 from os import environ
@@ -138,3 +139,7 @@ app = Starlette(
 
 log = logging.getLogger("uvicorn")
 log.setLevel(logging.DEBUG)
+
+if __name__ == "__main__":
+  import uvicorn
+  uvicorn.run(app, host="127.0.0.1", port=8001)

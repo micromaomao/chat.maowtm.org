@@ -101,6 +101,7 @@ export class ChatController extends React.Component<P, S> {
 
   componentWillUnmount(): void {
     this.unsubscribeCredentials();
+    this.unload();
   }
 
   get chat_token(): string | null {
@@ -127,15 +128,17 @@ export class ChatController extends React.Component<P, S> {
     }
 
     const inTransitMessages = this.state.inTransitMessages.slice();
-    let idx = inTransitMessages.findIndex(m => m.client_tag === message.client_tag);
+    let idx = inTransitMessages.findIndex(m => m.client_tag == message.client_tag);
     if (idx != -1) {
       inTransitMessages.splice(idx, 1);
+      this.setState({
+        typingExpiry: null
+      });
     }
 
     this.setState({
       messages: messages,
-      inTransitMessages: inTransitMessages,
-      typingExpiry: null,
+      inTransitMessages: inTransitMessages
     });
   }
 
@@ -212,6 +215,7 @@ export class ChatController extends React.Component<P, S> {
             }
           },
           onmessage: (evt) => {
+            if (this.sseController !== abort_controller) return;
             refreshSSEPingTimeout();
             switch (evt.event) {
               case "message":
@@ -318,28 +322,37 @@ export class ChatController extends React.Component<P, S> {
       msg_type: MessageType.USER,
       error: null,
     };
-    this.state.inTransitMessages.push(phantom);
     this.setState({
-      inTransitMessages: this.state.inTransitMessages,
+      inTransitMessages: [...this.state.inTransitMessages, phantom],
       suggestions: null,
     });
     await this.handleSendPhantom(phantom);
   }
 
   async handleSendPhantom(phantom: PhantomMessage) {
+    let sess = this.session_id;
     try {
       await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
         message: phantom.content,
         client_tag: phantom.client_tag,
       });
+      if (this.session_id != sess) return;
       // Phantom will be automatically removed by SSE event.
       this.setState({
         typingExpiry: Date.now() + 8000,
       });
     } catch (e) {
-      phantom.error = e;
+      if (this.session_id != sess) return;
+      let inTransitMessages = this.state.inTransitMessages;
+      for (let i = 0; i < inTransitMessages.length; i += 1) {
+        if (inTransitMessages[i] === phantom) {
+          inTransitMessages[i] = Object.assign({}, inTransitMessages[i], {
+            error: null
+          });
+        }
+      }
       this.setState({
-        inTransitMessages: this.state.inTransitMessages,
+        inTransitMessages,
         typingExpiry: null,
       });
     }
