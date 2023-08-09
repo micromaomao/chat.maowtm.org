@@ -45,3 +45,7 @@
 .suggestionBtn:hover:active {
   border: 1px solid var(--colorCompoundBrandStrokePressed);
 }
+
+.hide {
+  display: none;
+}

@@ -144,8 +144,10 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
   );
 }
 
+export const EditingMsgStateKey = "ChatMessageList.editing";
+
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
-  const [editingMsg, setEditingMsg] = useSharedState<string | null>(`ChatMessageList.editing`, null);
+  const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
   const canEdit = getCredentialManager().has_admin_auth;
   const msg_edit_suspense = (

@@ -5,6 +5,7 @@ import { LightbulbFilament24Regular, LightbulbFilamentRegular, SendFilled } from
 import { useChatCredentials } from 'app/utils/credentials';
 import { useSharedState } from 'app/utils/sharedstate';
 import StartNewChatButton from './startNewChatButton';
+import { EditingMsgStateKey } from './chatMessagesList';
 
 interface P {
   chat_id: string;
@@ -18,6 +19,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
   const can_reply = !!chat_token;
   const [text, setText] = useSharedState("chatText", chat_token ? "" : "Can't add message to this chat.");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
 
   function handleChange(_, data) {
     let text = data.value;
@@ -60,8 +62,10 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     }
   }
 
+  const hide = window.innerHeight <= 800 && editingMsg !== null;
+
   return (
-    <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "")}>
+    <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "") + (hide ? ` ${classes.hide}` : "")}>
       <div className={classes.suggestionRow}>
         {suggestions.length > 0 ? (
           <LightbulbFilament24Regular color="var(--colorBrandForeground1)" />
