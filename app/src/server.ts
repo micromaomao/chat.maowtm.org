@@ -14,6 +14,12 @@ import getConfigStore from "db/config";
 
   app.use(express.text({ type: "text/plain" }));
   app.use(express.json({ type: "application/json" }));
+  app.use((req, res, next) => {
+    res.set("X-Content-Type-Options", "nosniff");
+    res.set("X-Frame-Options", "DENY");
+    res.set("Content-Security-Policy", "script-src 'self'");
+    next();
+  });
 
   app.use("/api", api);
 
