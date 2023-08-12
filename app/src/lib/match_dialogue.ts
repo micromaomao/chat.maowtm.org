@@ -316,8 +316,6 @@ export class DialogueMatcher {
       }
     }
 
-    trees.reverse();
-
     let first = true;
     for (let tree of trees) {
       if (!first) {
