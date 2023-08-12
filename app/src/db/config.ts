@@ -1,4 +1,4 @@
-import { withDBClient } from ".";
+import { withDBClient, Client as DBClient } from ".";
 import package_json from "../../package.json";
 import * as mq from "./mq";
 import * as path from "path";
@@ -6,6 +6,9 @@ import { readFileSync } from "fs";
 import { MsgType } from "./enums";
 import { LLMBase } from "lib/llm/base";
 import { chatCompletionModelFromConfig, embeddingModelFromConfig } from "lib/llm/config";
+import type { Response } from "express";
+import { RateLimit } from "./rate_limit";
+import { GlobalChatRateLimitExceeded } from "../api/basics";
 
 const APP_VERSION = package_json.version;
 
@@ -24,6 +27,11 @@ export interface GenerationModel extends Model {
   reserve_token_count: number;
 }
 
+export type ChatRateLimitConfig = {
+  limit: number;
+  reset_period: number;
+}[];
+
 export interface Config {
   embedding_model: Model;
   generation_model: GenerationModel;
@@ -31,6 +39,7 @@ export interface Config {
   prompt_template: string;
   allow_new_session: boolean;
   allow_new_chat: boolean;
+  global_rate_limit: ChatRateLimitConfig;
 }
 
 export class ConfigStore {
@@ -59,6 +68,10 @@ export class ConfigStore {
       prompt_template: DEFAULT_PROMPT_TEMPLATE,
       allow_new_session: true,
       allow_new_chat: true,
+      global_rate_limit: [
+        { limit: 30, reset_period: 60 },
+        { limit: 60, reset_period: 600 }
+      ]
     };
     return conf;
   }
@@ -84,7 +97,10 @@ export class ConfigStore {
         }
         store.cached_config = config;
         if (stored_version != APP_VERSION) {
-          // TODO: migrate config
+          store.cached_config = {
+            ...(await ConfigStore.defaultConfig()),
+            ...store.cached_config
+          };
           await c.query({
             text: "insert into global_configuration (config, app_version) values ($1, $2)",
             values: [store.cached_config, APP_VERSION]
@@ -119,6 +135,21 @@ export class ConfigStore {
 
   get embedding_model(): LLMBase {
     return embeddingModelFromConfig(this.config.embedding_model);
+  }
+
+  async enforceGlobalRateLimit(http_res: Response, db?: DBClient): Promise<void> {
+    if (!db) {
+      return await withDBClient(db => this.enforceGlobalRateLimit(http_res, db));
+    }
+    for (let i = 0; i < this.config.global_rate_limit.length; i += 1) {
+      let key = `global_rate_limit[${i}]`;
+      let { limit, reset_period } = this.config.global_rate_limit[i];
+      let obj = new RateLimit(key, limit, reset_period);
+      let res = await obj.bump(db, http_res);
+      if (!res.success) {
+        throw new GlobalChatRateLimitExceeded(res);
+      }
+    }
   }
 }
 

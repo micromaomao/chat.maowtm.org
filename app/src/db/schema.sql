@@ -5,7 +5,7 @@ create table db_migration_state (
   -- Incremented every time an incompatible change is made to the schema
   db_compat_version integer not null
 );
-insert into db_migration_state (db_compat_version) values (1);
+insert into db_migration_state (db_compat_version) values (2);
 
 -- Global configuration like prompt to use, etc.
 create table global_configuration (
@@ -188,4 +188,11 @@ create table chat_suggestion (
 create table admin_token (
   token bytea not null primary key,
   expiry timestamptz not null
+);
+
+-- A simple table to track rate limiting
+create table rate_limit_state (
+  key text not null primary key,
+  last_reset timestamptz not null,
+  count int not null
 );

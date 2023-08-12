@@ -9,7 +9,9 @@ import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token/nodejs";
 import { cancelGenerationTask, startBackgroundGenerateResponseTask } from "./gen_response";
 import { MatchDialogueResult } from "./match_dialogue";
-import { APIError } from "../api/basics";
+import { APIError, GlobalChatRateLimitExceeded } from "../api/basics";
+import { RateLimit } from "db/rate_limit";
+import { response, type Response } from "express";
 
 export interface FetchLastChatMessagesOptions {
   session_id: string;
@@ -109,16 +111,13 @@ export interface NewChatMessageReplyMetadata extends MatchDialogueResult {
   regen_of?: string;
 }
 
-export async function userNewChatPreCheck(session_id: string, db?: DBClient): Promise<void> {
-  if (!db) {
-    return await withDBClient(db => userNewChatPreCheck(session_id, db));
-  }
-  let conf = (await getConfigStore()).config;
+export async function userNewChatPreCheck(session_id: string, db: DBClient, http_res: Response): Promise<void> {
+  let conf_store = await getConfigStore();
+  let conf = conf_store.config;
   if (!conf.allow_new_chat) {
     throw new APIError(503, "The server has disabled new chat messages at this time.");
   }
-  // TODO: check rate limit
-  // TODO: check captcha
+  await conf_store.enforceGlobalRateLimit(http_res, db);
 }
 
 export async function addChatMessage(message: NewChatMessage, db_client?: DBClient): Promise<NewChatMessageEvent> {

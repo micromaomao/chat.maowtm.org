@@ -4,9 +4,11 @@ import * as db from "./db";
 import { OpenAIError } from "./lib/llm/openai";
 import { APIError } from "./api/basics";
 import path from "path";
+import getConfigStore from "db/config";
 
 (async () => {
   await db.init();
+  await getConfigStore();
 
   const app = express();
 

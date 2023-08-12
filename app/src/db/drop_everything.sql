@@ -12,5 +12,6 @@ drop table if exists chat_reply_edit_log cascade;
 drop table if exists chat_reply_metadata cascade;
 drop table if exists chat_suggestion cascade;
 drop table if exists admin_token;
+drop table if exists rate_limit_state;
 
 drop extension if exists ulid;

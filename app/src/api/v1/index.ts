@@ -181,7 +181,7 @@ apiRouter.post("/chat-session/:session_id/send-chat", async (req, res) => {
   let msg = await withDBClient(async db => {
     await requireValidChatTokenAuth(req, session_id, db);
     if (!await hasValidAdminAuth(req)) {
-      await userNewChatPreCheck(session_id, db);
+      await userNewChatPreCheck(session_id, db, res);
     }
     const content = req.body.message;
     let msg = await addChatMessage({

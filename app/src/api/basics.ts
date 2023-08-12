@@ -1,3 +1,5 @@
+import { RateLimitBumpResponse } from "db/rate_limit";
+
 export class APIError extends Error {
   status;
   constructor(status?: number, message?: string) {
@@ -21,5 +23,19 @@ export class InvalidChatSessionError extends APIError {
 export class APIValidationError extends APIError {
   constructor(message: string) {
     super(400, message);
+  }
+}
+
+export class GlobalChatRateLimitExceeded extends APIError {
+  constructor(
+    public readonly rateLimitRes: RateLimitBumpResponse,
+  ) {
+    let seconds = rateLimitRes.reset_remaining_secs;
+    let minutes = Math.floor(seconds / 60);
+    let human = `${seconds} seconds`;
+    if (minutes >= 1) {
+      human = `${minutes} minute${minutes > 1 ? "s" : ""}`;
+    }
+    super(503, `Chat has been temporarily disabled due to reaching the global rate limit. Please try again in ${human}.`);
   }
 }

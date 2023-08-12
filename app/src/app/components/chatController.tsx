@@ -127,22 +127,31 @@ export class ChatController extends React.Component<P, S> {
       messages.splice(insert_loc, 0, message);
     }
 
-    const inTransitMessages = this.state.inTransitMessages.slice();
-    let idx = inTransitMessages.findIndex(m => m.client_tag == message.client_tag);
-    if (idx != -1) {
-      inTransitMessages.splice(idx, 1);
-    }
-
     this.setState({
       messages: messages,
-      inTransitMessages: inTransitMessages
     });
+
+    if (message.client_tag) {
+      this.updatePhantom(message.client_tag, null);
+    }
 
     if (message.msg_type == MessageType.BOT) {
       this.setState({
         typingExpiry: null
       });
     }
+  }
+
+  updatePhantom(client_tag: string, phantom: PhantomMessage | null) {
+    let inTransitMessages = this.state.inTransitMessages.filter(x => x.client_tag != client_tag);
+    if (phantom) {
+      if (this.state.messages.findIndex(x => x.client_tag == client_tag) == -1) {
+        inTransitMessages.push(phantom);
+      }
+    }
+    this.setState({
+      inTransitMessages: inTransitMessages,
+    });
   }
 
   stopSSE() {
@@ -330,13 +339,15 @@ export class ChatController extends React.Component<P, S> {
       error: null,
     };
     this.setState({
-      inTransitMessages: [...this.state.inTransitMessages, phantom],
       suggestions: null,
     });
+    this.updatePhantom(phantom.client_tag, phantom);
     await this.handleSendPhantom(phantom);
   }
 
   async handleSendPhantom(phantom: PhantomMessage) {
+    phantom = { ...phantom, error: null };
+    this.updatePhantom(phantom.client_tag, phantom);
     let sess = this.session_id;
     try {
       await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
@@ -350,16 +361,11 @@ export class ChatController extends React.Component<P, S> {
       });
     } catch (e) {
       if (this.session_id != sess) return;
-      let inTransitMessages = this.state.inTransitMessages;
-      for (let i = 0; i < inTransitMessages.length; i += 1) {
-        if (inTransitMessages[i] === phantom) {
-          inTransitMessages[i] = Object.assign({}, inTransitMessages[i], {
-            error: null
-          });
-        }
+      if (e instanceof ApiError) {
+        e = new Error(e.body);
       }
+      this.updatePhantom(phantom.client_tag, { ...phantom, error: e });
       this.setState({
-        inTransitMessages,
         typingExpiry: null,
       });
     }
@@ -369,7 +375,7 @@ export class ChatController extends React.Component<P, S> {
     let messages = this.state.messages.slice();
     let idx = messages.findIndex(m => m.id == message_id);
     if (idx != -1) {
-      messages[idx] = Object.assign({}, messages[idx]);
+      messages[idx] = { ...messages[idx] };
       if (messages[idx].metadata) {
         messages[idx].metadata.updated_before = true;
       }
@@ -386,8 +392,7 @@ export class ChatController extends React.Component<P, S> {
         if (![MessageType.USER, MessageType.BOT].includes(messages[i].msg_type)) {
           continue;
         }
-        messages[i] = Object.assign({}, messages[i]);
-        messages[i].exclude_from_generation = true;
+        messages[i] = { ...messages[i], exclude_from_generation: true };
       }
       this.setState({ messages: messages });
     }
