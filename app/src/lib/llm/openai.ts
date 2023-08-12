@@ -1,4 +1,4 @@
-import { LLMBase, LLMCOmpletionOutput, LLMChatCompletionInput, LLMEmbeddingOutput, TelemetryInfo } from "./base";
+import { CheckModerationResult, LLMBase, LLMCOmpletionOutput, LLMChatCompletionInput, LLMEmbeddingOutput, ModerationProvider, TelemetryInfo } from "./base";
 import { input2log } from "lib/utils";
 
 const API_BASE = process.env.OPENAI_API_BASE;
@@ -98,6 +98,11 @@ export interface OpenAIChatCompletionConfig {
   presence_penalty?: number;
   frequency_penalty?: number;
   max_tokens: number;
+
+  /**
+   * Defaults to true
+   */
+  use_moderation?: boolean;
 }
 
 export class OpenAIChatCompletionModel extends OpenAIBase {
@@ -107,6 +112,13 @@ export class OpenAIChatCompletionModel extends OpenAIBase {
   config: OpenAIChatCompletionConfig;
   constructor(model_name: string, config: OpenAIChatCompletionConfig) {
     super(model_name, config);
+    if (typeof this.config.use_moderation == "undefined") {
+      this.config.use_moderation = true;
+    }
+  }
+
+  get shouldUseModeration(): boolean {
+    return this.config.use_moderation;
   }
 
   async chatCompletion(input: LLMChatCompletionInput, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<LLMCOmpletionOutput> {
@@ -123,7 +135,12 @@ export class OpenAIChatCompletionModel extends OpenAIBase {
     }
     const res = await parseResponse(await fetch(new URL("chat/completions", API_BASE), {
       body: JSON.stringify({
-        ...this.config,
+        temperature: this.config.temperature,
+        top_p: this.config.top_p,
+        presence_penalty: this.config.presence_penalty,
+        frequency_penalty: this.config.frequency_penalty,
+        max_tokens: this.config.max_tokens,
+
         model: this.model_name,
         user: telemetry.session_id || undefined,
         messages
@@ -142,6 +159,42 @@ export class OpenAIChatCompletionModel extends OpenAIBase {
       completion_tokens: res.usage.completion_tokens,
       total_tokens: res.usage.total_tokens,
     }
+  }
+
+  async checkModeration(text: string, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<CheckModerationResult> {
+    console.log(`OpenAI POST moderations { input: ${input2log(text)} }`);
+    const res = await parseResponse(await fetch(new URL("moderations", API_BASE), {
+      body: JSON.stringify({
+        input: text,
+      }),
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + API_KEY,
+        "Accept": "application/json",
+      },
+      signal: abortSignal,
+    }));
+    if (res.results.length != 1) {
+      console.warn(`Unexpected result length ${res.results.length} returned from OpenAI moderation API`);
+    }
+    for (let result of res.results) {
+      if (result.flagged) {
+        let res: CheckModerationResult = {
+          flagged: true,
+          flagged_categories: [],
+          moderation_provider: ModerationProvider.OpenAI,
+        };
+        for (let [cat, flagged] of Object.entries(result.categories)) {
+          if (flagged) {
+            res.flagged_categories.push(cat);
+          }
+        }
+        console.info(`OpenAI Moderation flagged input ${input2log(text)}:`, res.flagged_categories);
+        return res;
+      }
+    }
+    return { flagged: false };
   }
 }
 

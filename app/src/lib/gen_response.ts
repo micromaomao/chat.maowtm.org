@@ -3,7 +3,7 @@ import { NewChatMessageEvent, addChatMessage, excludeSingleMessage } from "./cha
 import { Client as DBClient, withDBClient } from "db/index";
 import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
-import { ChatHistoryInputLine, LLMBase, LLMChatCompletionInput } from "./llm/base";
+import { ChatHistoryInputLine, CheckModerationResult, LLMBase, LLMChatCompletionInput } from "./llm/base";
 import { MatchDialogueResult, DialogueMatcher, getCachedMatcher } from "./match_dialogue";
 import { NewChatSuggestionEvent, extractSuggestions, fetchSuggestions, setMessageSuggestions } from "./chat_suggestions";
 
@@ -33,6 +33,15 @@ const EXTRA_SUGGESTIONS_DELAY = 5000;
 class UnrecoverableGenerationError extends Error {
   constructor(message: string) {
     super(message);
+  }
+}
+
+class ModerationFlaggedError extends UnrecoverableGenerationError {
+  constructor(public readonly mod_res: CheckModerationResult) {
+    if (!mod_res.flagged) {
+      throw new Error("Assertion failed: mod_res.flagged is false");
+    }
+    super(`moderation flagged: ${mod_res.flagged_categories.join(",")}`)
   }
 }
 
@@ -245,22 +254,25 @@ in ${this.session_id}:`, e);
         throw cancelledError;
       }
 
-      let input: LLMChatCompletionInput = {
-        chat_history: [],
-        instruction_prompt: prompt,
+      type InputLine = {
+        msg_id: string;
+        role: "user" | "bot",
+        text: string,
+        text_without_suggestions: string,
       };
+      let chat_input_lines: InputLine[] = [];
 
-      let chat_input_ids = [];
       let attempted_include_suggestions = false;
       for (let row of msg_hist_full) {
-        chat_input_ids.push(row.id);
-        let input_line: ChatHistoryInputLine = {
+        let input_line: InputLine = {
+          msg_id: row.id,
           role: row.msg_type == MsgType.User ? "user" : "bot",
           text: row.content,
+          text_without_suggestions: row.content,
         };
-        input.chat_history.push(input_line);
+        chat_input_lines.push(input_line);
         let new_total_tokens = curr_total_tokens + row.nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD; // Some overhead for message separators
-        if (new_total_tokens > max_prompt_tokens && input.chat_history.length > 1) {
+        if (new_total_tokens > max_prompt_tokens && chat_input_lines.length > 1) {
           break;
         }
         curr_total_tokens = new_total_tokens;
@@ -268,6 +280,9 @@ in ${this.session_id}:`, e);
         if (!attempted_include_suggestions && row.msg_type == MsgType.Bot) {
           attempted_include_suggestions = true;
           let suggestions = await fetchSuggestions(row.id);
+          if (this.cancelled) {
+            throw cancelledError;
+          }
           if (suggestions.length > 0) {
             let additional_text = "\n" + suggestions.map((x, i) => `Suggestion ${i + 1}: ${x}`).join("\n");
             input_line.text += additional_text;
@@ -276,14 +291,33 @@ in ${this.session_id}:`, e);
         }
       }
 
-      if (input.chat_history[input.chat_history.length - 1].role == "bot" && input.chat_history.length >= 2) {
-        curr_total_tokens -= msg_hist_full[input.chat_history.length - 1].nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD;;
-        input.chat_history.pop();
-        chat_input_ids.pop();
+      // If earliest message is bot, remove it as there is no need to include it
+      // if we aren't including the corresponding user message.
+      if (chat_input_lines[chat_input_lines.length - 1].role == "bot" && chat_input_lines.length >= 2) {
+        curr_total_tokens -= msg_hist_full[chat_input_lines.length - 1].nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD;;
+        chat_input_lines.pop();
       }
 
-      input.chat_history.reverse();
-      chat_input_ids.reverse();
+      chat_input_lines.reverse();
+
+      if (generation_model.shouldUseModeration) {
+        let mod_res = await generation_model.checkModeration(
+          chat_input_lines.filter(x => x.role == "user").map(x => x.text_without_suggestions).join("\n"),
+          { session_id: this.session_id },
+          this.abort_controller.signal
+        );
+        if (this.cancelled) {
+          throw cancelledError;
+        }
+        if (mod_res.flagged) {
+          throw new ModerationFlaggedError(mod_res);
+        }
+      }
+
+      let input: LLMChatCompletionInput = {
+        chat_history: chat_input_lines,
+        instruction_prompt: prompt,
+      };
 
       let completion_res = await generation_model.chatCompletion(input, { session_id: this.session_id }, this.abort_controller.signal);
       if (this.cancelled) {
@@ -306,7 +340,7 @@ in ${this.session_id}:`, e);
           supress_generation: true,
           reply_metadata: {
             ...match_res,
-            model_chat_inputs: chat_input_ids
+            model_chat_inputs: chat_input_lines.map(x => x.msg_id),
           }
         }, db);
 
@@ -394,12 +428,33 @@ in ${this.session_id}:`, e);
     } else if (!new_msg) {
       try {
         await withDBClient(async db => {
-          await addChatMessage({
-            msg_type: MsgType.Error,
-            session_id: this.session_id,
-            content: `Failed to generate reply for the previous message. Please try again later.\n${error}`,
-          }, db);
-          await excludeSingleMessage(this.last_message_id, db);
+          if (error instanceof ModerationFlaggedError) {
+            let content = "Your message cannot be processed because it has been flagged by the OpenAI moderation model as " +
+              "against their usage policy, in the following ";
+            if (error.mod_res.flagged_categories.length == 1) {
+              content += "category: ";
+            } else {
+              content += "categories: ";
+            }
+            content += error.mod_res.flagged_categories.join(", ") +
+              ".\n" +
+              "Unfortunately, because this application currently relies on OpenAI's language model for message generation," +
+              " we are unable to further process this chat session unless you revert one or more of your messages," +
+              " by clicking the \"rollback\" icon on the first offending message you sent.\n" +
+              "You can also start a new chat session by clicking the \"Start new chat\" button.";
+            await addChatMessage({
+              msg_type: MsgType.Error,
+              session_id: this.session_id,
+              content
+            });
+          } else {
+            await addChatMessage({
+              msg_type: MsgType.Error,
+              session_id: this.session_id,
+              content: `Failed to generate reply for the previous message. Please try again later.\n${error}`,
+            }, db);
+            await excludeSingleMessage(this.last_message_id, db);
+          }
         });
       } catch (e) {
         console.error(`Failed to send error message back to user on chat session ${this.session_id}`, e)

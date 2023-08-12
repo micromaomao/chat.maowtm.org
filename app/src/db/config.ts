@@ -55,7 +55,8 @@ export class ConfigStore {
         name: "gpt-3.5-turbo",
         config: {
           temperature: 0.5,
-          top_p: 1
+          top_p: 1,
+          use_moderation: true,
         },
         history_limit: 50,
         total_token_limit: 4096,

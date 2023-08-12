@@ -1,6 +1,6 @@
 {
   "name": "chat.maowtm.org",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "browserslist": "> 0.5%, last 2 versions, not dead",
   "scripts": {

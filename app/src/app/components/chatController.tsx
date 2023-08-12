@@ -135,7 +135,7 @@ export class ChatController extends React.Component<P, S> {
       this.updatePhantom(message.client_tag, null);
     }
 
-    if (message.msg_type == MessageType.BOT) {
+    if (message.msg_type == MessageType.BOT || message.msg_type == MessageType.ERROR) {
       this.setState({
         typingExpiry: null
       });
