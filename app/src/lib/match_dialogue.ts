@@ -311,15 +311,12 @@ export class DialogueMatcher {
       model_input.push({ role: "user", text: phrasing_q_text_cache.get(node.selected_phrasing.phrasing_id) });
       model_input.push({ role: "bot", text: item_response_cache.get(node.this_item.dialogue_item_id) });
 
-      let first = true;
       for (let child of node.children) {
-        if (!first) {
-          model_input.push("---");
-        }
-        first = false;
         await dfs(child);
       }
     }
+
+    trees.reverse();
 
     let first = true;
     for (let tree of trees) {
