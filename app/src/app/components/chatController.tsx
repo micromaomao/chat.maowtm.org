@@ -50,6 +50,7 @@ interface S {
   suggestions: ChatSuggestions | null;
   inTransitMessages: PhantomMessage[];
   typingExpiry: number | null;
+  typingFor: string | null;
 }
 
 interface P {
@@ -65,6 +66,7 @@ const InitialState: S = {
   suggestions: null,
   inTransitMessages: [],
   typingExpiry: null,
+  typingFor: null,
 };
 
 export class ChatController extends React.Component<P, S> {
@@ -116,6 +118,24 @@ export class ChatController extends React.Component<P, S> {
     return this.props.chat_id;
   }
 
+  clearTypingOnMsg(msg_id: string) {
+    if (this.state.typingFor !== null && this.state.typingFor <= msg_id) {
+      this.setState({
+        typingFor: null,
+        typingExpiry: null,
+      });
+    }
+  }
+
+  showTyping(msg_id: string) {
+    if (this.state.typingFor === null || this.state.typingFor < msg_id) {
+      this.setState({
+        typingFor: msg_id,
+        typingExpiry: Date.now() + 8000,
+      });
+    }
+  }
+
   updateMessage(message: Message) {
     const messages = this.state.messages.slice();
     const insert_loc = messages.findIndex(m => m.id >= message.id);
@@ -136,9 +156,7 @@ export class ChatController extends React.Component<P, S> {
     }
 
     if (message.msg_type == MessageType.BOT || message.msg_type == MessageType.ERROR) {
-      this.setState({
-        typingExpiry: null
-      });
+      this.clearTypingOnMsg(message.id);
     }
   }
 
@@ -272,8 +290,10 @@ export class ChatController extends React.Component<P, S> {
         });
         return;
       }
+      let sess_id = this.session_id;
       let arr = await Promise.allSettled([
-        fetchChatData(this.props.chat_id).then(init_msg_list => {
+        fetchChatData(sess_id).then(init_msg_list => {
+          if (this.session_id != sess_id) return;
           this.setState({
             messages: init_msg_list.messages,
             suggestions: init_msg_list.last_suggestions,
@@ -283,6 +303,7 @@ export class ChatController extends React.Component<P, S> {
         }),
         this.startSSE(),
       ]);
+      if (this.session_id != sess_id) return;
       for (let elem of arr) {
         if (elem.status == "rejected") {
           throw elem.reason;
@@ -350,24 +371,19 @@ export class ChatController extends React.Component<P, S> {
     this.updatePhantom(phantom.client_tag, phantom);
     let sess = this.session_id;
     try {
-      await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
+      let msg_id = await DefaultService.postChatSessionSendChat(this.props.chat_id, this.chat_token, {
         message: phantom.content,
         client_tag: phantom.client_tag,
       });
       if (this.session_id != sess) return;
       // Phantom will be automatically removed by SSE event.
-      this.setState({
-        typingExpiry: Date.now() + 8000,
-      });
+      this.showTyping(msg_id);
     } catch (e) {
       if (this.session_id != sess) return;
       if (e instanceof ApiError) {
         e = new Error(e.body);
       }
       this.updatePhantom(phantom.client_tag, { ...phantom, error: e });
-      this.setState({
-        typingExpiry: null,
-      });
     }
   }
 
