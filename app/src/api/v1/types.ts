@@ -3,6 +3,7 @@ import { MsgType } from "db/enums";
 export enum MsgTypeStr {
   Bot = "bot",
   User = "user",
+  Error = "error",
 }
 
 export function msgTypeToStr(msg_type: MsgType): MsgTypeStr {
@@ -11,6 +12,8 @@ export function msgTypeToStr(msg_type: MsgType): MsgTypeStr {
       return MsgTypeStr.Bot;
     case MsgType.User:
       return MsgTypeStr.User;
+    case MsgType.Error:
+      return MsgTypeStr.Error;
     default:
       throw new Error(`Unknown message type ${msg_type}`);
   }

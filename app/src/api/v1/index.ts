@@ -3,7 +3,7 @@ import * as OpenApiValidator from "express-openapi-validator";
 import apiSpec from "../../../../api.json";
 import adminRoutes from "./admin";
 import client_tags from "db/client_tag";
-import { NewChatMessageEvent, addChatMessage, fetchLastChatMessages, findChatMessageSession, newChatSssion, rollbackChat, userNewChatPreCheck, userNewSessionPreCheck } from "lib/chat";
+import { ExcludeSingleMessageEvent, NewChatMessageEvent, addChatMessage, fetchLastChatMessages, fetchSingleMessage, findChatMessageSession, newChatSssion, rollbackChat, userNewChatPreCheck, userNewSessionPreCheck } from "lib/chat";
 import { withDBClient } from "db/index";
 import { InvalidChatSessionError } from "../basics";
 import { hasValidAdminAuth, requireValidChatTokenAuth, requireValidChatTokenOrAdmin } from "../auth_basics";
@@ -11,8 +11,9 @@ import { MsgType } from "db/enums";
 import getConfigStore from "db/config";
 import * as mq from "db/mq"
 import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
-import { msgTypeToStr } from "./types";
+import { FetchedChatMessage, msgTypeToStr } from "./types";
 import { NewChatSuggestionEvent, fetchSuggestions } from "lib/chat_suggestions";
+import { MessageEditedEvent } from "lib/dialogue_items";
 
 const apiRouter = Router();
 
@@ -85,53 +86,81 @@ apiRouter.get("/chat-session/:session_id/stream", async (req, res) => {
   if (!session) {
     throw new InvalidChatSessionError();
   }
+  let has_admin = await hasValidAdminAuth(req);
 
   let closed = false;
+  let ping_interval: NodeJS.Timeout | null = null;
+
+  function close() {
+    if (closed) return;
+    closed = true;
+    res.end();
+    mq.queue.off(session_id, listener);
+    if (ping_interval !== null) {
+      clearInterval(ping_interval);
+    }
+  }
+
   async function listener(_msg: ChatSessionEvent) {
     if (closed) {
       return;
     }
-    let client_msg: [string, any] | null = null;
-    if (_msg._event == ChatSessionEventType.NewChatMessage) {
-      let msg = _msg as NewChatMessageEvent;
-      client_msg = ["message", {
-        id: msg.id,
-        session: msg.session_id,
-        msg_type: msgTypeToStr(msg.msg_type),
-        content: msg.content,
-        client_tag: msg.client_tag || await client_tags.ulidToTag(msg.id),
-        metadata: {
-          updated_before: false,
-          user_feedback: 0
+    try {
+      let client_msg: [string, any] | null = null;
+      if (_msg._event == ChatSessionEventType.NewChatMessage) {
+        let msg = _msg as NewChatMessageEvent;
+        let data: FetchedChatMessage = {
+          id: msg.id,
+          msg_type: msgTypeToStr(msg.msg_type),
+          content: msg.content,
+          metadata: {
+            updated_before: false,
+            user_feedback: 0
+          },
+          exclude_from_generation: false,
+          client_tag: msg.client_tag || await client_tags.ulidToTag(msg.id),
+        };
+        client_msg = ["message", data];
+      } else if (_msg._event == ChatSessionEventType.NewSuggestions) {
+        let msg = _msg as NewChatSuggestionEvent;
+        client_msg = ["suggestions", {
+          reply_msg: msg.reply_msg,
+          suggestions: msg.suggestions,
+        }];
+      } else if (_msg._event == ChatSessionEventType.ExcludeSingleMessage) {
+        let msg = _msg as ExcludeSingleMessageEvent;
+        let updated_msg = await fetchSingleMessage(msg.id);
+        updated_msg.exclude_from_generation = true;
+        client_msg = ["message", updated_msg];
+      } else if (_msg._event == ChatSessionEventType.MessageEdited && has_admin) {
+        let msg = _msg as MessageEditedEvent;
+        let updated_msg = await fetchSingleMessage(msg.id);
+        if (!updated_msg.metadata) {
+          throw new Error("Assertion failed: metadata should exist");
         }
-      }];
-    } else if (_msg._event == ChatSessionEventType.NewSuggestions) {
-      let msg = _msg as NewChatSuggestionEvent;
-      client_msg = ["suggestions", {
-        reply_msg: msg.reply_msg,
-        suggestions: msg.suggestions,
-      }];
+        updated_msg.metadata.updated_before = true;
+        client_msg = ["message", updated_msg];
+      }
+      if (closed || !client_msg) {
+        return;
+      }
+      res.write(`event: ${client_msg[0]}\ndata: ${JSON.stringify(client_msg[1])}\n\n`);
+    } catch (e) {
+      console.error("Error while streaming message:", e);
+      close();
     }
-    if (closed || !client_msg) {
-      return;
-    }
-    res.write(`event: ${client_msg[0]}\ndata: ${JSON.stringify(client_msg[1])}\n\n`);
   }
 
   res.on("close", () => {
-    if (closed) {
-      return;
-    }
-    closed = true;
-    res.end();
-    mq.queue.off(session_id, listener);
+    close();
   });
-  mq.queue.on(session_id, listener);
 
   res.status(200).type("text/event-stream");
   res.flushHeaders();
 
-  let ping_interval = setInterval(() => {
+  mq.queue.on(session_id, listener);
+
+  ping_interval = setInterval(() => {
     if (closed) {
       clearInterval(ping_interval);
       return;

@@ -382,6 +382,10 @@ export class ChatController extends React.Component<P, S> {
     let idx = messages.findIndex(m => m.id >= message_id);
     if (idx != -1) {
       for (let i = idx; i < messages.length; i++) {
+        if (messages[i].id < message_id) continue;
+        if (![MessageType.USER, MessageType.BOT].includes(messages[i].msg_type)) {
+          continue;
+        }
         messages[i] = Object.assign({}, messages[i]);
         messages[i].exclude_from_generation = true;
       }

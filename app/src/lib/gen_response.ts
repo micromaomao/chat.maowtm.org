@@ -1,5 +1,5 @@
 import { MsgType } from "db/enums";
-import { NewChatMessageEvent, addChatMessage } from "./chat"
+import { NewChatMessageEvent, addChatMessage, excludeSingleMessage } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
 import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
@@ -132,6 +132,7 @@ in ${this.session_id}:`, e);
     if (this.generated_message_evt || this.cancelled) {
       return;
     }
+
     const conf_store = await getConfigStore();
     let config = conf_store.config;
     let generation_model = conf_store.generation_model;
@@ -391,7 +392,18 @@ in ${this.session_id}:`, e);
 > ${input2log(this.src_message_evt?.content)}\n\
 < ${input2log(new_msg?.content)}`);
     } else if (!new_msg) {
-      // TODO: send an error message
+      try {
+        await withDBClient(async db => {
+          await addChatMessage({
+            msg_type: MsgType.Error,
+            session_id: this.session_id,
+            content: `Failed to generate reply for the previous message. Please try again later.\n${error}`,
+          }, db);
+          await excludeSingleMessage(this.last_message_id, db);
+        });
+      } catch (e) {
+        console.error(`Failed to send error message back to user on chat session ${this.session_id}`, e)
+      }
     }
   }
 }

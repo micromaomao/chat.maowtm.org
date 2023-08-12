@@ -18,6 +18,34 @@ export interface FetchLastChatMessagesOptions {
   db_client?: DBClient;
 }
 
+const _fetchMessageCommonSelectPart = `
+  select
+    msg.id as id,
+    msg.msg_type as msg_type,
+    msg.content as content,
+    mtd.reply_msg is not null as "metadata._exists",
+    mtd.last_edit is not null as "metadata.updated_before",
+    mtd.user_feedback as "metadata.user_feedback",
+    msg.exclude_from_generation as exclude_from_generation
+  from chat_message msg
+  left outer join chat_reply_metadata mtd
+    on msg.id = mtd.reply_msg
+`;
+
+async function _processFetchedMessageRow(row: any): Promise<any> {
+  row = nestProperties(row);
+  row.msg_type = msgTypeToStr(row.msg_type);
+  row.client_tag = await client_tags.ulidToTag(row.id);
+  if (row.metadata) {
+    if (!row.metadata._exists) {
+      delete row.metadata;
+    } else {
+      delete row.metadata._exists;
+    }
+  }
+  return row;
+}
+
 export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions): Promise<FetchedChatMessage[]> {
   if (!opts.db_client) {
     return await withDBClient(db => fetchLastChatMessages({ ...opts, db_client: db }));
@@ -26,37 +54,38 @@ export async function fetchLastChatMessages(opts: FetchLastChatMessagesOptions):
   let { rows }: { rows: any[] } = await db.query({
     name: "chats.ts#fetchLastChatMessages",
     text: `
-      select
-        msg.id as id,
-        msg.msg_type as msg_type,
-        msg.content as content,
-        mtd.reply_msg is not null as "metadata._exists",
-        mtd.last_edit is not null as "metadata.updated_before",
-        mtd.user_feedback as "metadata.user_feedback",
-        msg.exclude_from_generation as exclude_from_generation
-      from chat_message msg
-      left outer join chat_reply_metadata mtd
-        on msg.id = mtd.reply_msg
-      where msg.session = $1 and ($2::text is null or id < $2::text)
+      ${_fetchMessageCommonSelectPart}
+      where msg.session = $1 and ($2::text is null or msg.id < $2::text)
       order by id desc
       limit $3;`,
     values: [opts.session_id, opts.until, opts.limit],
   });
   for (let i = 0; i < rows.length; i++) {
-    rows[i] = nestProperties(rows[i]);
-    let row = rows[i];
-    row.msg_type = msgTypeToStr(row.msg_type);
-    row.client_tag = await client_tags.ulidToTag(row.id);
-    if (row.metadata) {
-      if (!row.metadata._exists) {
-        delete row.metadata;
-      } else {
-        delete row.metadata._exists;
-      }
-    }
+    rows[i] = await _processFetchedMessageRow(rows[i]);
   }
   rows.reverse();
   return rows as FetchedChatMessage[];
+}
+
+export async function fetchSingleMessage(message_id: string, db?: DBClient): Promise<FetchedChatMessage> {
+  if (!db) {
+    return await withDBClient(db => fetchSingleMessage(message_id, db));
+  }
+  let { rows }: { rows: any[] } = await db.query({
+    name: "chats.ts#fetchSingleMessage",
+    text: `
+      ${_fetchMessageCommonSelectPart}
+      where msg.id = $1`,
+    values: [message_id],
+  });
+  if (rows.length == 0) {
+    throw new ChatMessageNotFoundError(message_id);
+  }
+  if (rows.length > 1) {
+    throw new Error("Assertion failed: row.length > 1");
+  }
+  let res = await _processFetchedMessageRow(rows[0]);
+  return res as FetchedChatMessage;
 }
 
 export interface NewChatMessage {
@@ -92,13 +121,16 @@ export async function userNewChatPreCheck(session_id: string, db?: DBClient): Pr
   // TODO: check captcha
 }
 
-export async function addChatMessage(message: NewChatMessage, db_client: DBClient): Promise<NewChatMessageEvent> {
+export async function addChatMessage(message: NewChatMessage, db_client?: DBClient): Promise<NewChatMessageEvent> {
+  if (!db_client) {
+    return await withDBClient(db => addChatMessage(message, db));
+  }
   let conf = await getConfigStore();
   if (message.generation_model && message.nb_tokens === undefined && message.generation_model == conf.generation_model.model_name) {
     message.nb_tokens = await conf.generation_model.countTokens(message.content, { session_id: message.session_id });
   }
-  if (message.msg_type == MsgType.User && message.reply_metadata) {
-    throw new Error("Invalid message - user messages cannot have reply metadata");
+  if (message.msg_type != MsgType.Bot && message.reply_metadata) {
+    throw new Error("Invalid message - non-bot messages cannot have reply metadata");
   }
   let { rows: [{ id }] } = await db_client.query({
     text: "insert into chat_message (session, msg_type, content, generation_model, nb_tokens) values ($1, $2, $3, $4, $5) returning id;",
@@ -191,7 +223,29 @@ export async function rollbackChat(session_id: string, first_message_id_to_exclu
   await db.query({
     text: `
       update chat_message set exclude_from_generation = true
-        where session = $1 and id >= $2`,
+        where session = $1 and id >= $2 and
+          (msg_type = ${MsgType.User} or msg_type = ${MsgType.Bot})`,
     values: [session_id, first_message_id_to_exclude],
   });
+}
+
+export interface ExcludeSingleMessageEvent extends ChatSessionEvent {
+  _event: ChatSessionEventType.ExcludeSingleMessage;
+  id: string;
+}
+
+export async function excludeSingleMessage(message_id: string, db: DBClient): Promise<ExcludeSingleMessageEvent> {
+  let { rows } = await db.query({
+    text: "update chat_message set exclude_from_generation = true where id = $1 returning session;",
+    values: [message_id],
+  });
+  if (rows.length == 0) {
+    throw new ChatMessageNotFoundError(message_id);
+  }
+  let evt: ExcludeSingleMessageEvent = {
+    _event: ChatSessionEventType.ExcludeSingleMessage,
+    id: message_id,
+  };
+  mq.queue.emit(rows[0].session, evt);
+  return evt;
 }

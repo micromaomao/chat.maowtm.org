@@ -5,6 +5,9 @@ import getConfigStore from "db/config";
 import { APIError } from "../api/basics";
 import { ListDialogueItemsResult } from "app/openapi";
 import { deleteCachedMatcher } from "./match_dialogue";
+import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
+import * as mq from "db/mq"
+import { ChatMessageNotFoundError } from "./chat";
 
 export class DialogueItemNotFoundError extends APIError {
   constructor(item_id: string) {
@@ -220,7 +223,21 @@ export async function newDialogueItem(data: DialogueItemInput, parent_id: string
   return item_id;
 }
 
-export async function _editMsgCommitEditLog(message_id: string, edited_item_id: string, db: DBClient): Promise<void> {
+export interface MessageEditedEvent extends ChatSessionEvent {
+  _event: ChatSessionEventType.MessageEdited;
+  id: string;
+  edited_item_id: string;
+}
+
+export async function _editMsgCommitEditLog(message_id: string, edited_item_id: string, db: DBClient): Promise<MessageEditedEvent> {
+  let { rows }: { rows: any[] } = await db.query({
+    text: "select session from chat_message where id = $1",
+    values: [message_id]
+  });
+  if (rows.length == 0) {
+    throw new ChatMessageNotFoundError(message_id);
+  }
+  let session_id = rows[0].session;
   const { rows: [{ id: edit_log_id }] } = await db.query({
     text: "insert into chat_reply_edit_log (reply_msg, edited_dialogue_item) values ($1, $2) returning id",
     values: [message_id, edited_item_id]
@@ -229,18 +246,27 @@ export async function _editMsgCommitEditLog(message_id: string, edited_item_id: 
     text: "update chat_reply_metadata set last_edit = $2 where reply_msg = $1",
     values: [message_id, edit_log_id]
   });
+  let evt: MessageEditedEvent = {
+    _event: ChatSessionEventType.MessageEdited,
+    id: message_id,
+    edited_item_id,
+  };
+  mq.queue.emit(session_id, evt);
+  return evt;
 }
 
-export async function editMsgAddNewChild(message_id: string, parent_id: string | null, dialogue_item_data: DialogueItemInput, db: DBClient): Promise<void> {
+export async function editMsgAddNewChild(message_id: string, parent_id: string | null, dialogue_item_data: DialogueItemInput, db: DBClient): Promise<MessageEditedEvent> {
   const new_item_id = await newDialogueItem(dialogue_item_data, parent_id, db);
-  await _editMsgCommitEditLog(message_id, new_item_id, db);
+  let evt = await _editMsgCommitEditLog(message_id, new_item_id, db);
   deleteCachedMatcher();
+  return evt;
 }
 
-export async function editMsgUpdateDialogueItem(message_id: string, item_id: string, dialogue_item_data: DialogueItemInput, db: DBClient): Promise<void> {
+export async function editMsgUpdateDialogueItem(message_id: string, item_id: string, dialogue_item_data: DialogueItemInput, db: DBClient): Promise<MessageEditedEvent> {
   await updateDialogueItem(item_id, dialogue_item_data, db);
-  await _editMsgCommitEditLog(message_id, item_id, db);
+  let evt = await _editMsgCommitEditLog(message_id, item_id, db);
   deleteCachedMatcher();
+  return evt;
 }
 
 export async function fetchMessageEditedDialogueItem(message_id: string, db: DBClient): Promise<FetchedDialogueItemData | null> {

@@ -60,6 +60,9 @@ export function OrderBoxAndButtons({ message_type, box, buttons }) {
           {buttons}
         </>
       ) : null}
+      {message_type == MessageType.ERROR ? (
+        box
+      ) : null}
     </>
   )
 }

@@ -17,7 +17,7 @@
 }
 
 .msgType_user .box {
-  background-color: #9300CC;
+  background-color: var(--colorBrandForegroundLink);
   color: var(--colorBrandBackgroundInverted);
 }
 
@@ -26,15 +26,29 @@
   color: var(--colorNeutralForeground1);
 }
 
+.msgType_error {
+  justify-content: center;
+}
+
+.msgType_error .box {
+  background-color: var(--colorPaletteRedBackground1);
+  border: 2px solid var(--colorPaletteRedBorder2);
+  color: var(--colorPaletteRedForeground1);
+  max-width: 1000px;
+}
+
 .box {
   border-radius: 8px;
   padding: 8px 15px;
   flex-shrink: 1;
-  max-width: 900px;
-  max-width: min(900px, calc(100% - 40px));
   line-height: 1;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.msgType_user .box, .msgType_bot .box {
+  max-width: 900px;
+  max-width: min(900px, calc(100% - 40px));
 }
 
 .excludedMsg .box {

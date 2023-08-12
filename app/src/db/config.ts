@@ -42,7 +42,7 @@ export class ConfigStore {
         config: {}
       },
       generation_model: {
-        type: "openai",
+        type: "openai-chat",
         name: "gpt-3.5-turbo",
         config: {
           temperature: 0.5,

@@ -18,6 +18,8 @@ export const MSG_APP_CONFIG_CHANGE = "app_config_change";
 export enum ChatSessionEventType {
   NewChatMessage = "new_chat_message",
   NewSuggestions = "new_suggestions",
+  MessageEdited = "message_edited",
+  ExcludeSingleMessage = "exclude_single_message",
 }
 
 export interface ChatSessionEvent {

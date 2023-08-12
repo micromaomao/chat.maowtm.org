@@ -857,7 +857,8 @@
         "description": "Type of a chat message",
         "enum": [
           "bot",
-          "user"
+          "user",
+          "error"
         ],
         "example": "bot"
       },
