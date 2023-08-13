@@ -295,7 +295,7 @@ export async function tracePrevReplyMsgDialoguePath(message_id: string, db: DBCl
     text: `
       select
         msg.id as msg_id,
-        mtd.best_match_dialogue as best_match_item_id,
+        mtd.matched_dialogue_items[1] as best_match_item_id,
         el.edited_dialogue_item as edited_item_id
       from
         chat_message msg

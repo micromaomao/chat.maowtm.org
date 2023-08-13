@@ -15,9 +15,8 @@ export interface MatchDialogueChatHistoryEntry {
 export type SampleInputLine = ChatHistoryInputLine | "---";
 
 export interface MatchDialogueResult {
-  matched_phrasings: string[];
-  match_scores: number[];
-  best_match_dialogue: string | null;
+  matched_dialogue_items: string[];
+  matched_item_scores: number[];
   direct_result: boolean;
   model_sample_input: SampleInputLine[];
 }
@@ -337,9 +336,8 @@ export class DialogueMatcher {
     }
 
     return {
-      matched_phrasings: batch_sim.ranked_phrasings.slice(0, 5).map(ph => ph.phrasing_id),
-      match_scores: [...batch_sim.scores.subarray(0, 5)],
-      best_match_dialogue: item_matches.length > 0 ? item_matches[0].item.dialogue_item_id : null,
+      matched_dialogue_items: item_matches.map(x => x.item.dialogue_item_id),
+      matched_item_scores: item_matches.map(x => x.score),
       direct_result: false,
       model_sample_input: model_input,
     }

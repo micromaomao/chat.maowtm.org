@@ -14,7 +14,7 @@ const SCHEMA_SQL = read_to_string("schema.sql");
 const IDLE_TIMEOUT_MS = 5000;
 const CONNECT_TIMEOUT_MS = 10000;
 
-const APPLICATION_DB_VERSION = 2;
+const APPLICATION_DB_VERSION = 3;
 
 let pg_pool = null;
 
