@@ -108,7 +108,6 @@ export interface NewChatMessageEvent extends NewChatMessage, ChatSessionEvent {
 
 export interface NewChatMessageReplyMetadata extends MatchDialogueResult {
   model_chat_inputs: string[];
-  regen_of?: string;
 }
 
 export async function userNewChatPreCheck(session_id: string, db: DBClient, http_res: Response): Promise<void> {
@@ -138,9 +137,16 @@ export async function addChatMessage(message: NewChatMessage, db_client?: DBClie
   let mtd = message.reply_metadata;
   if (mtd) {
     await db_client.query({
-      text: "insert into chat_reply_metadata (reply_msg, matched_dialogue_items, matched_item_scores, model_chat_inputs, direct_result, regen_of) values ($1, $2, $3, $4, $5, $6, $7);",
+      text: `
+        insert into chat_reply_metadata (
+          reply_msg,
+          matched_dialogue_items,
+          matched_item_scores,
+          model_chat_inputs,
+          direct_result
+        ) values ($1, $2, $3, $4, $5);`,
       values: [
-        id, mtd.matched_dialogue_items, mtd.matched_item_scores, mtd.model_chat_inputs, mtd.direct_result, mtd.regen_of
+        id, mtd.matched_dialogue_items, mtd.matched_item_scores, mtd.model_chat_inputs, mtd.direct_result
       ]
     });
   }

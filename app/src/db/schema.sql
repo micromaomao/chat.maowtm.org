@@ -164,7 +164,6 @@ create table chat_reply_metadata (
   -- enum: -1 = dislike, 0 = default, 1 = like
   user_feedback int not null default 0,
 
-  regen_of text default null references chat_message (id) on delete set null,
   last_edit text default null references chat_reply_edit_log (id) on delete set null
 );
 

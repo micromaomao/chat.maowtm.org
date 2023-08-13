@@ -108,4 +108,8 @@ async function run_migration(db: Client) {
   //   alter table chat_reply_metadata drop column best_match_dialogue;
   // `);
   // Actually let's keep these around for now, just in case
+
+  await db.query(`
+    alter table chat_reply_metadata drop column regen_of;
+  `);
 }
