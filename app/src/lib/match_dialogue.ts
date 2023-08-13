@@ -336,8 +336,8 @@ export class DialogueMatcher {
     }
 
     return {
-      matched_dialogue_items: item_matches.map(x => x.item.dialogue_item_id),
-      matched_item_scores: item_matches.map(x => x.score),
+      matched_dialogue_items: item_matches.slice(0, 10).map(x => x.item.dialogue_item_id),
+      matched_item_scores: item_matches.slice(0, 10).map(x => x.score),
       direct_result: false,
       model_sample_input: model_input,
     }
