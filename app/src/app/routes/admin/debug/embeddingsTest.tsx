@@ -4,11 +4,10 @@ import { Alert } from "@fluentui/react-components/unstable";
 import { DeleteRegular, AddCircleRegular } from "@fluentui/react-icons";
 import { useSharedState } from "app/utils/sharedstate";
 import { PureComponent, RefObject, createContext, createRef, useContext, useEffect, useState } from "react";
-import useSWRImmutable from "swr/immutable";
 
 import * as styles from "./embeddings.module.css";
 import { API_BASE } from "app/consts";
-import { AdminService, OpenAPI } from "app/openapi";
+import { AdminService, ApiError } from "app/openapi";
 
 const setBestMatchHighlightContext = createContext<any>(null);
 
@@ -119,17 +118,42 @@ class ResponseError extends Error {
   }
 }
 
-const fetcher = (key: string) => fetch(key, { headers: { "Accept": "application/json", ...OpenAPI.HEADERS } }).then(async res => {
-  if (!res.ok) {
-    if (res.headers.get("content-type")?.startsWith("text/plain")) {
-      const text = await res.text();
-      throw new ResponseError(text);
-    } else {
-      throw new ResponseError(`${res.status} ${res.statusText}`);
+async function fetchEmbeddingDebugResult(inputs: string[], model: string): Promise<any> {
+  try {
+    let res = await AdminService.getDebugEmbeddings(inputs, model);
+    return res;
+  } catch (e) {
+    if (e instanceof ApiError) {
+      e = new Error(e.body);
     }
+    throw e;
   }
-  return await res.json();
-});
+}
+
+function useEmbeddingDebugResult(inputs: string[], model: string): { data: any, error: Error, isLoading: boolean, retry: () => void } {
+  let [data, setData] = useState<any>(null);
+  let [error, setError] = useState<Error>(null);
+  let [isLoading, setIsLoading] = useState<boolean>(true);
+  let [retryCount, setRetryCount] = useState<number>(0);
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    fetchEmbeddingDebugResult(inputs, model).then(res => {
+      if (cancelled) return;
+      setIsLoading(false);
+      setData(res);
+      setError(null);
+    }, err => {
+      if (cancelled) return;
+      setIsLoading(false);
+      setError(err);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [model, inputs, retryCount]);
+  return { data, error, isLoading, retry: () => setRetryCount(retryCount + 1) };
+}
 
 function EmbeddingsResult({ inputs, model }: {
   inputs: string[],
@@ -139,7 +163,7 @@ function EmbeddingsResult({ inputs, model }: {
   for (const input of inputs) {
     key += `&input=${encodeURIComponent(input)}`;
   }
-  let { data, error, isLoading, mutate } = useSWRImmutable(key, fetcher, { shouldRetryOnError: false, keepPreviousData: true });
+  let { data, error, isLoading, retry } = useEmbeddingDebugResult(inputs, model);
   if (typeof data !== "object") {
     data = null;
   }
@@ -156,7 +180,7 @@ function EmbeddingsResult({ inputs, model }: {
         <ProgressBar as="div" value={undefined} thickness="medium" />
       ) : null}
       {error ? (
-        <Alert intent="error" action={isLoading ? undefined : (<Link onClick={evt => mutate(key)}>Retry</Link>)}>
+        <Alert intent="error" action={isLoading ? undefined : (<Link onClick={retry}>Retry</Link>)}>
           {error.toString()}
         </Alert>
       ) : null}
