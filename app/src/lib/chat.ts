@@ -8,7 +8,7 @@ import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
 import { generateToken } from "./secure_token/nodejs";
 import { cancelGenerationTask, startBackgroundGenerateResponseTask } from "./gen_response";
-import { MatchDialogueResult } from "./match_dialogue";
+import { ItemsMatchTree, MatchDialogueResult, ReconstructedItemMatchResult, getCachedMatcher } from "./match_dialogue";
 import { APIError, GlobalChatRateLimitExceeded } from "../api/basics";
 import { RateLimit } from "db/rate_limit";
 import { response, type Response } from "express";
@@ -259,4 +259,80 @@ export async function excludeSingleMessage(message_id: string, db: DBClient): Pr
   };
   mq.queue.emit(rows[0].session, evt);
   return evt;
+}
+
+export interface ItemsMatchTreeWithText extends ItemsMatchTree {
+  q_text: string;
+  response: string;
+  children: ItemsMatchTreeWithText[];
+}
+
+export interface ReconstructedMessageMatchResult {
+  match_trees: ItemsMatchTreeWithText[];
+  has_missing_items: boolean;
+  has_missing_phrasings: boolean;
+  nb_nodes: number;
+  nb_total_items_matched: number;
+}
+
+export async function reconstrucMessageMatchResult(message_id: string, db?: DBClient): Promise<ReconstructedMessageMatchResult | null> {
+  if (!db) {
+    return await withDBClient(db => reconstrucMessageMatchResult(message_id, db));
+  }
+  let { rows }: { rows: any[] } = await db.query({
+    // Need to cast ulid[] to text[] otherwise pg will treat it as text.
+    text: `
+      select
+        msg.id as id,
+        mtd.reply_msg is not null as "_mtd_exists",
+        direct_result,
+        matched_dialogue_items::text[] as matched_dialogue_items,
+        matched_item_scores,
+        best_phrasing::text[] as best_phrasing
+      from
+        chat_message msg
+        left outer join chat_reply_metadata mtd
+          on (msg.id = mtd.reply_msg)
+      where msg.id = $1`,
+    values: [message_id],
+  });
+  if (rows.length == 0) {
+    throw new ChatMessageNotFoundError(message_id);
+  }
+  let row = rows[0];
+  if (!row._mtd_exists) {
+    return null;
+  }
+  if (row.matched_dialogue_items.length == 0 || row.matched_item_scores.length == 0) {
+    return null;
+  }
+  let matcher = await getCachedMatcher();
+  let reconstructed_res = await matcher.reconstructItemMatchResults(row.matched_dialogue_items, row.matched_item_scores, row.best_phrasing);
+  let has_missing_phrasing_items = new Set();
+  for (let item of reconstructed_res.item_matches) {
+    if (item.missing_phrasing_id) {
+      has_missing_phrasing_items.add(item.item.dialogue_item_id);
+    }
+  }
+  let conf = (await getConfigStore()).config;
+  let tree = matcher.itemsToTrees(reconstructed_res.item_matches, conf.generation_model.max_sample_tokens);
+  let has_missing_phrasings = tree.all_nodes.some(x => has_missing_phrasing_items.has(x.this_item.dialogue_item_id));
+  let q_text_cache = await matcher.getPhrasingQTextCache(tree.all_nodes.map(x => x.selected_phrasing.phrasing_id), db);
+  let response_cache = await matcher.getResponseTextCache(tree.all_nodes.map(x => x.this_item.dialogue_item_id), db);
+  function dfsMapNode(node: ItemsMatchTree): ItemsMatchTreeWithText {
+    return {
+      ...node,
+      q_text: q_text_cache.get(node.selected_phrasing.phrasing_id),
+      response: response_cache.get(node.this_item.dialogue_item_id),
+      children: node.children.map(dfsMapNode),
+    };
+  }
+  let res: ReconstructedMessageMatchResult = {
+    has_missing_items: reconstructed_res.missing_items.length > 0,
+    has_missing_phrasings,
+    match_trees: tree.trees.map(dfsMapNode),
+    nb_nodes: tree.all_nodes.length,
+    nb_total_items_matched: reconstructed_res.item_matches.length + reconstructed_res.missing_items.length,
+  };
+  return res;
 }

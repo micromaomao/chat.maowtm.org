@@ -14,6 +14,7 @@ import { MaybeShowTyping } from "./typingAnimation";
 import { SharedStateProvider } from "app/utils/sharedstate";
 import { fetchEventSource } from "@microsoft/fetch-event-source"
 import { chatControllerContext } from "./contexts";
+import { clearReplyAnalysisCache } from "app/utils/replyAnalysis";
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
@@ -282,6 +283,7 @@ export class ChatController extends React.Component<P, S> {
   }
 
   async initialize() {
+    clearReplyAnalysisCache();
     try {
       if (!this.chat_token && !this.admin_token) {
         this.setState({

@@ -1,8 +1,8 @@
 import React from "react";
 import { ApiError, DefaultService, Message, MessageType } from "app/openapi";
 import * as classes from "./chatMessagesList.module.css"
-import { Button, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
-import { ArrowUndo16Regular, Edit16Filled, Edit16Regular, ErrorCircle20Regular } from "@fluentui/react-icons";
+import { Button, Link, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
+import { ArrowUndo16Regular, Edit16Filled, Edit16Regular, ErrorCircle20Regular, ScanText16Regular } from "@fluentui/react-icons";
 import { useAutoScrollUpdateSignal } from "./autoScroll";
 import { useSharedState } from "app/utils/sharedstate";
 import { getCredentialManager, useChatCredentials } from "app/utils/credentials";
@@ -10,12 +10,15 @@ import { useChatController } from "./contexts";
 import { useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-toast";
 
 const MessageEditComponent = React.lazy(() => import("./messageEdit"));
+const MessageInspectComponent = React.lazy(() => import("./messageInspect"));
 
 interface MessageComponentProps {
   message: Message;
-  enable_buttons: boolean;
-  handle_edit?: () => void;
+  enableButtons: boolean;
+  handleEdit?: () => void;
   editing?: boolean;
+  handleInspect?: () => void;
+  inspecting?: boolean;
 };
 
 export interface PhantomMessage {
@@ -67,7 +70,22 @@ export function OrderBoxAndButtons({ message_type, box, buttons }) {
   )
 }
 
-export function MessageComponent({ message, enable_buttons, handle_edit, editing }: MessageComponentProps) {
+export function MessageButton({ show, onClick, icon, title, disabled }) {
+  if (!show) {
+    return null;
+  }
+  return (
+    <a
+      onClick={disabled ? undefined : onClick}
+      title={title}
+      className={classes.button + (disabled ? ` ${classes.btnDisabled}` : "")}
+    >
+      {icon}
+    </a>
+  )
+}
+
+export function MessageComponent({ message, enableButtons, handleEdit, editing, handleInspect, inspecting }: MessageComponentProps) {
   const box = getBox(message.content, message.msg_type, message.exclude_from_generation);
   const chatController = useChatController();
   const chatToken = useChatCredentials(chatController.session_id);
@@ -95,32 +113,34 @@ export function MessageComponent({ message, enable_buttons, handle_edit, editing
   }
   const buttons = (
     <div className={classes.buttons}>
-      {(enable_buttons && handle_edit && message.msg_type == MessageType.BOT && message.metadata) ?
-        <Button
-          onClick={handle_edit}
-          icon={message.metadata?.updated_before ? <Edit16Filled /> : <Edit16Regular />}
-          appearance="transparent"
-          title="Improve this message"
-          size="small"
-        />
-        : null}
-      {(enable_buttons && message.msg_type == MessageType.USER && !message.exclude_from_generation && chatToken) ? (
-        <Button
-          onClick={handleRollback}
-          icon={<ArrowUndo16Regular />}
-          appearance="transparent"
-          title="Rollback this and below message"
-          size="small"
-          disabled={rollingBack}
-        />
-      ) : null}
+      <MessageButton
+        show={enableButtons && handleEdit && message.msg_type == MessageType.BOT && message.metadata}
+        onClick={handleEdit}
+        icon={message.metadata?.updated_before ? <Edit16Filled /> : <Edit16Regular />}
+        title="Improve this message"
+        disabled={false}
+      />
+      <MessageButton
+        show={enableButtons && handleInspect && message.msg_type == MessageType.BOT && message.metadata}
+        onClick={handleInspect}
+        icon={<ScanText16Regular />}
+        title="Show reply analysis"
+        disabled={false}
+      />
+      <MessageButton
+        show={enableButtons && message.msg_type == MessageType.USER && !message.exclude_from_generation && chatToken}
+        onClick={handleRollback}
+        icon={<ArrowUndo16Regular />}
+        title="Rollback this and below message"
+        disabled={rollingBack}
+      />
     </div>
   )
   return (
     <div className={
       classes.message + " " + classes[`msgType_${message.msg_type}`] +
       (message.exclude_from_generation ? ` ${classes.excludedMsg}` : "") +
-      (editing ? ` ${classes.editingMsg}` : "")
+      ((editing || inspecting) ? ` ${classes.editingMsg}` : "")
     }>
       <OrderBoxAndButtons message_type={message.msg_type} box={box} buttons={buttons} />
     </div>
@@ -148,11 +168,14 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 }
 
 export const EditingMsgStateKey = "ChatMessageList.editing";
+export const InspectingMsgStateKey = "ChatMessageList.inspecting";
 
 export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
   const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
+  const [inspectingMsg, setInspectingMsg] = useSharedState<string | null>(InspectingMsgStateKey, null);
+  const [overrideEditUpdateDialogueId, setOverrideEditUpdateDialogueId] = React.useState<string | null>(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
-  const canEdit = getCredentialManager().has_admin_auth;
+  const hasAdmin = getCredentialManager().has_admin_auth;
   const msg_edit_suspense = (
     <Skeleton>
       <SkeletonItem />
@@ -165,16 +188,39 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
   return (
     <>
       {messages_list.map((message, i) => {
-        const handleEdit = () => {
-          setEditingMsg(message.id);
-          autoScrollUpdate();
-        };
-        const handleClose = () => {
-          setEditingMsg(null);
-          autoScrollUpdate();
-        };
-        let lastUserMessage = null;
+        let handleEdit, handleCloseEdit, handleInspect, handleCloseInspect, handleEditItem;
         const editingCurrMsg = editingMsg === message.id;
+        const inspectingCurrMsg = inspectingMsg === message.id;
+        if (hasAdmin && enable_buttons) {
+          handleEdit = () => {
+            setOverrideEditUpdateDialogueId(null);
+            setEditingMsg(message.id);
+            if (inspectingCurrMsg) {
+              setInspectingMsg(null);
+            }
+            autoScrollUpdate();
+          };
+          handleInspect = () => {
+            setInspectingMsg(message.id);
+            autoScrollUpdate();
+          };
+          handleCloseEdit = () => {
+            setOverrideEditUpdateDialogueId(null);
+            setEditingMsg(null);
+            autoScrollUpdate();
+          };
+          handleCloseInspect = () => {
+            setInspectingMsg(null);
+            autoScrollUpdate();
+          };
+          handleEditItem = (dialogue_id: string) => {
+            setOverrideEditUpdateDialogueId(dialogue_id);
+            setEditingMsg(message.id);
+            setInspectingMsg(null);
+            autoScrollUpdate();
+          };
+        }
+        let lastUserMessage = null;
         if (editingCurrMsg && i > 0) {
           for (let j = i - 1; j >= 0; j--) {
             if (messages_list[j].msg_type == MessageType.USER) {
@@ -187,13 +233,25 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
           <React.Fragment key={message.id}>
             <MessageComponent
               message={message}
-              handle_edit={(enable_buttons && canEdit) ? handleEdit : undefined}
+              handleEdit={handleEdit}
+              handleInspect={handleInspect}
               editing={editingCurrMsg}
-              enable_buttons={enable_buttons}
+              inspecting={inspectingCurrMsg}
+              enableButtons={enable_buttons}
             />
+            {inspectingCurrMsg ? (
+              <React.Suspense fallback={msg_edit_suspense}>
+                <MessageInspectComponent message={message} onClose={handleCloseInspect} onEdit={handleEditItem} />
+              </React.Suspense>
+            ) : null}
             {editingCurrMsg ? (
               <React.Suspense fallback={msg_edit_suspense}>
-                <MessageEditComponent message={message} userMessage={lastUserMessage} onClose={handleClose} />
+                <MessageEditComponent
+                  message={message}
+                  userMessage={lastUserMessage}
+                  onClose={handleCloseEdit}
+                  defaultUpdateId={overrideEditUpdateDialogueId}
+                />
               </React.Suspense>
             ) : null}
           </React.Fragment>

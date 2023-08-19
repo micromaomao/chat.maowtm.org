@@ -35,7 +35,7 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
     setInitialLoad(false);
   }
   useEffect(() => {
-    if (inspectionData.edited) {
+    if (inspectionData?.edited) {
       let item = inspectionData.updated_dialogue_item!;
       if (updateId === item.path[item.path.length - 1].dialogue_id) {
         setPhrasings(inspectionData.updated_dialogue_item.phrasings);
@@ -188,7 +188,7 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
 
       {submitError ? (
         <div className={classes.error}>
-          <ErrorCircle20Regular style={{marginRight: "10px"}} /> {submitError.message}
+          <ErrorCircle20Regular style={{ marginRight: "10px" }} /> {submitError.message}
         </div>
       ) : null}
     </>
@@ -416,30 +416,76 @@ function PhrasingEditor({ phrasings, onChange }: PhrasingEditorP) {
 }
 
 interface P {
+  defaultUpdateId?: string | null;
   message: Message;
   userMessage?: Message;
   onClose: () => void;
 }
 
-export default function MessageEditComponent({ message, userMessage, onClose }: P) {
-  const [inspectionData, setInspectionData] = useState<InspectLastEditResult>(null)
+export default function MessageEditComponent({ defaultUpdateId, message, userMessage, onClose }: P) {
   const [error, setError] = useState(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
+
+  const [initialReady, setInitialReady] = useState<boolean>(false);
+  const [inspectionData, setInspectionData] = useState<InspectLastEditResult>(null)
+  const [initialPath, setInitialPath] = useState<MetadataDialoguePath>(null);
+  const [initialIsCreate, setInitialIsCreate] = useState<boolean>(true);
+
   const [updateId, setUpdateId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
 
-  async function fetchInspectionData() {
+  async function fetchInspectionData(signal: AbortSignal) {
     try {
-      setInspectionData(await AdminService.getMessagesInspectLastEdit(message.id));
+      setInitialReady(false);
+      let inspectionData = await AdminService.getMessagesInspectLastEdit(message.id);
+      if (signal.aborted) return;
+      setInspectionData(inspectionData);
+      if (inspectionData.edited) {
+        let initialPath = inspectionData.updated_dialogue_item.path;
+        setInitialPath(initialPath);
+        setInitialIsCreate(false);
+        setUpdateId(initialPath[initialPath.length - 1].dialogue_id);
+        setParentId(null);
+      } else {
+        setInitialPath(inspectionData.prev_reply_path);
+        setInitialIsCreate(true);
+        setParentId(initialPath ? initialPath[initialPath.length - 1].dialogue_id : null);
+        setUpdateId(null);
+      }
+      setInitialReady(true);
       autoScrollUpdate();
     } catch (e) {
+      if (signal.aborted) return;
       setError(e);
     }
   }
-  useEffect(() => {
-    fetchInspectionData();
+
+  function handleReset(igore_default_update_id?: boolean) {
+    let controller = new AbortController();
+    setInitialReady(false);
+    setInspectionData(null);
+    setUpdateId(null);
+    setParentId(null);
+    if (!defaultUpdateId || igore_default_update_id) {
+      fetchInspectionData(controller.signal);
+    } else {
+      fetchDialogueItem(defaultUpdateId).then(item => {
+        if (controller.signal.aborted) return;
+        setInitialIsCreate(false);
+        setInitialPath(item.item_data.path);
+        setParentId(null);
+        setUpdateId(defaultUpdateId);
+        setInitialReady(true);
+      }, err => {
+        if (controller.signal.aborted) return;
+        setError(err);
+      });
+    }
     autoScrollUpdate();
-  }, [message.id]);
+    return () => controller.abort();
+  }
+
+  useEffect(handleReset, [message.id, defaultUpdateId]);
 
   function handlePathChange(is_create: boolean, item_or_parent_id: string) {
     if (is_create) {
@@ -452,53 +498,13 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
     autoScrollUpdate();
   }
 
-  let pathSelectorComponent = null;
-  let initialPath: MetadataDialoguePath = null;
-  let initialIsCreate = true;
-  if (inspectionData !== null) {
-    if (inspectionData.edited) {
-      initialPath = inspectionData.updated_dialogue_item.path;
-      initialIsCreate = false;
-    } else {
-      initialPath = inspectionData.prev_reply_path;
-    }
-    pathSelectorComponent = (
-      <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} />
-    );
-  }
-  useEffect(() => {
-    if (initialIsCreate) {
-      setParentId(initialPath ? initialPath[initialPath.length - 1].dialogue_id : null);
-      setUpdateId(null);
-    } else {
-      setUpdateId(initialPath[initialPath.length - 1].dialogue_id);
-      setParentId(null);
-    }
-  }, [initialPath, initialIsCreate]);
-
-  function handleReload() {
-    setInspectionData(null);
-    fetchInspectionData();
-    autoScrollUpdate();
-  }
-
-  let form = null;
-  if (inspectionData !== null) {
-    form = (
-      <MessageEditForm
-        onReset={handleReload}
-        {...{ updateId, parentId, inspectionData, message, userMessage }}
-      />
-    );
-  }
-
   return (
     <div className={classes.container}>
       <div className={classes.headingRow}>
         <Subtitle1>Improve this message</Subtitle1>
         <Button icon={<DismissRegular />} appearance="transparent" onClick={onClose} />
       </div>
-      {inspectionData === null && error === null ? (
+      {!initialReady && error === null ? (
         <Skeleton>
           <SkeletonItem size={32} />
           <div style={{ height: "16px" }} />
@@ -506,13 +512,20 @@ export default function MessageEditComponent({ message, userMessage, onClose }: 
         </Skeleton>
       ) : null}
       {error !== null ? (
-        <Alert intent="error" action={<Button onClick={fetchInspectionData}>Retry</Button>}>
+        <Alert intent="error" action={<Button onClick={handleReset.bind(undefined, false)}>Retry</Button>}>
           {error.message}
         </Alert>
       ) : null}
       <Fragment>
-        {pathSelectorComponent}
-        {form}
+        {initialReady ? (
+          <>
+            <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} />
+            <MessageEditForm
+              onReset={handleReset.bind(undefined, true)}
+              {...{ updateId, parentId, inspectionData, message, userMessage }}
+            />
+          </>
+        ) : null}
       </Fragment>
     </div>
   );

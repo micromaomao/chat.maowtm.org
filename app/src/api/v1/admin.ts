@@ -9,6 +9,9 @@ import { withDBClient, Client as DBClient } from "db/index";
 import { MsgType } from "db/enums";
 import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, listAllRoot, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
 import { DialogueItemInput, InspectLastEditResult } from "./types";
+import { ItemsMatchTree, getCachedMatcher } from "lib/match_dialogue";
+import { ItemsMatchTreeWithText, reconstrucMessageMatchResult } from "lib/chat";
+import { fetchSuggestions } from "lib/chat_suggestions";
 
 const apiRouter = Router();
 
@@ -87,6 +90,38 @@ apiRouter.get("/messages/:msg_id/inspect-last-edit", async (req, res) => {
     }
   });
   res.json(ret);
+});
+
+apiRouter.get("/messages/:msg_id/reply-analysis", async (req, res) => {
+  const message_id = req.params.msg_id;
+  let match_result: any = {
+    available: false
+  };
+  let suggestions = [];
+  await withDBClient(async db => {
+    let reconst_match_res = await reconstrucMessageMatchResult(message_id, db);
+    if (reconst_match_res) {
+      match_result.available = true;
+      match_result.has_missing_items = reconst_match_res.has_missing_items;
+      match_result.has_missing_phrasings = reconst_match_res.has_missing_phrasings;
+      function dfsMapNode(node: ItemsMatchTreeWithText): any {
+        return {
+          this_item: node.this_item.dialogue_item_id,
+          selected_phrasing: node.q_text,
+          response: node.response,
+          max_score: node.max_score,
+          children: node.children.map(dfsMapNode),
+        };
+      }
+      match_result.match_trees = reconst_match_res.match_trees.map(dfsMapNode);
+    }
+
+    suggestions = await fetchSuggestions(message_id, db);
+  });
+  return res.json({
+    match_result,
+    suggestions,
+  });
 });
 
 apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {

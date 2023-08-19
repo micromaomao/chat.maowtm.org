@@ -336,9 +336,9 @@
         }
       ]
     },
-    "/messages/{msg_id}/match-result": {
+    "/messages/{msg_id}/reply-analysis": {
       "get": {
-        "summary": "Inspect match result for a reply message",
+        "summary": "Get meta-information about how a reply was generated, such as the match tree",
         "description": "",
         "operationId": "",
         "tags": [
@@ -351,7 +351,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageMatchResult"
+                  "$ref": "#/components/schemas/ReplyAnalysis"
                 }
               }
             }
@@ -1156,13 +1156,17 @@
           "available": {
             "type": "boolean"
           },
-          "match_tree": {
-            "$ref": "#/components/schemas/MessageMatchResultMatchTree"
+          "match_trees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageMatchResultMatchTree"
+            },
+            "minItems": 0
           },
-          "has_missing_item": {
+          "has_missing_items": {
             "type": "boolean"
           },
-          "has_missing_phrasing": {
+          "has_missing_phrasings": {
             "type": "boolean"
           }
         },
@@ -1182,6 +1186,10 @@
             "type": "string",
             "description": "Text of the phrasing presented to the model"
           },
+          "response": {
+            "type": "string",
+            "description": "The item's response text"
+          },
           "max_score": {
             "type": "number",
             "description": "Max score among this and child items",
@@ -1190,7 +1198,8 @@
           "children": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MessageMatchResultMatchTree"
+              "$ref": "#/components/schemas/MessageMatchResultMatchTree",
+              "type": "string"
             }
           }
         },
@@ -1198,7 +1207,29 @@
           "this_item",
           "max_score",
           "selected_phrasing",
-          "children"
+          "children",
+          "response"
+        ]
+      },
+      "ReplyAnalysis": {
+        "type": "object",
+        "properties": {
+          "match_result": {
+            "$ref": "#/components/schemas/MessageMatchResult"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0,
+            "maxItems": 3,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "match_result",
+          "suggestions"
         ]
       }
     },

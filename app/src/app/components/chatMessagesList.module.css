@@ -66,3 +66,27 @@
   border: 3px solid var(--colorBrandBackground2);
   opacity: 1;
 }
+
+.buttons {
+  padding: 0 2px;
+}
+
+.button {
+  color: var(--colorNeutralForeground1);
+  cursor: pointer;
+  display: inline-block;
+  padding: 4px 2px;
+}
+
+.button:hover {
+  color: var(--colorBrandForegroundLink);
+}
+
+.button:active {
+  color: var(--colorBrandForegroundLinkPressed);
+}
+
+.btnDisabled, .btnDisabled:hover, .btnDisabled:active {
+  color: var(--colorNeutralForegroundDisabled);
+  cursor: not-allowed;
+}

@@ -152,7 +152,12 @@ function useEmbeddingDebugResult(inputs: string[], model: string): { data: any, 
       cancelled = true;
     };
   }, [model, inputs, retryCount]);
-  return { data, error, isLoading, retry: () => setRetryCount(retryCount + 1) };
+  return {
+    data, error, isLoading, retry: () => {
+      setRetryCount(retryCount + 1);
+      setError(null);
+    }
+  };
 }
 
 function EmbeddingsResult({ inputs, model }: {

@@ -293,26 +293,10 @@ export class DialogueMatcher {
     let { trees, all_nodes } = this.itemsToTrees(item_matches, sample_token_limit);
     let model_input: SampleInputLine[] = [];
 
-    let phrasing_q_text_cache = new Map<string, string>();
-    let item_response_cache = new Map<string, string>();
-
     let all_phrasing_ids = all_nodes.map(x => x.selected_phrasing.phrasing_id);
+    let phrasing_q_text_cache = await this.getPhrasingQTextCache(all_phrasing_ids, db);
     let all_item_ids = all_nodes.map(x => x.this_item.dialogue_item_id);
-
-    let { rows } = await db.query({
-      text: "select id, q_text from dialogue_phrasing where id = any($1)",
-      values: [all_phrasing_ids]
-    });
-    for (let row of rows) {
-      phrasing_q_text_cache.set(row.id, row.q_text);
-    }
-    ({ rows } = await db.query({
-      text: "select item_id, response from dialogue_item where item_id = any($1)",
-      values: [all_item_ids]
-    }));
-    for (let row of rows) {
-      item_response_cache.set(row.item_id, row.response);
-    }
+    let item_response_cache = await this.getResponseTextCache(all_item_ids, db);
 
     async function dfs(node: ItemsMatchTree) {
       model_input.push({ role: "user", text: phrasing_q_text_cache.get(node.selected_phrasing.phrasing_id) });
@@ -350,12 +334,36 @@ export class DialogueMatcher {
     }
   }
 
+  async getPhrasingQTextCache(phrasing_ids: string[], db: DBClient): Promise<Map<string, string>> {
+    let phrasing_q_text_cache = new Map<string, string>();
+    let { rows } = await db.query({
+      text: "select id, q_text from dialogue_phrasing where id = any($1)",
+      values: [phrasing_ids]
+    });
+    for (let row of rows) {
+      phrasing_q_text_cache.set(row.id, row.q_text);
+    }
+    return phrasing_q_text_cache;
+  }
+
+  async getResponseTextCache(item_ids: string[], db: DBClient): Promise<Map<string, string>> {
+    let item_response_cache = new Map<string, string>();
+    let { rows } = await db.query({
+      text: "select item_id, response from dialogue_item where item_id = any($1)",
+      values: [item_ids]
+    });
+    for (let row of rows) {
+      item_response_cache.set(row.item_id, row.response);
+    }
+    return item_response_cache;
+  }
+
   async reconstructItemMatchResults(item_ids: string[], scores: number[], best_phrasing_ids: string[]): Promise<ReconstructItemMatchesResult> {
     if (scores.length == 0) {
       throw new Error("Missing scores");
     }
     if (item_ids.length != scores.length) {
-      throw new Error(`Assertion failed: item_ids.length != scores.length`);
+      throw new Error(`Assertion failed: item_ids.length (=${item_ids.length}) != scores.length (=${scores.length})`);
     }
     let res: ReconstructItemMatchesResult = {
       item_matches: [],
