@@ -1,4 +1,4 @@
-import React, { RefObject, useContext, useEffect, useState } from "react";
+import React, { RefObject, useContext, useEffect, useLayoutEffect, useState } from "react";
 
 interface P {
   onUserScroll?: ((is_at_bottom: boolean) => void) | null;
@@ -18,7 +18,7 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
     if (!container) return;
 
     function onScrollHandler() {
-      let is_at_bottom = container.scrollHeight - container.clientHeight < container.scrollTop + 1;
+      let is_at_bottom = container.scrollHeight - container.clientHeight < container.scrollTop + 2;
       setKeepAtBottom(is_at_bottom);
       if (onUserScroll) onUserScroll(is_at_bottom);
     }
@@ -49,7 +49,7 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
     };
   }, [keepAtBottom, containerRef.current])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (keepAtBottom && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
@@ -57,6 +57,7 @@ export default function AutoScrollComponent({ onUserScroll, containerRef, childr
       hook();
     }
   });
+
   return (
     <signalContext.Provider value={forceUpdate}>
       {children}

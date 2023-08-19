@@ -5,7 +5,7 @@ import { LightbulbFilament24Regular, LightbulbFilamentRegular, SendFilled } from
 import { useChatCredentials } from 'app/utils/credentials';
 import { useSharedState } from 'app/utils/sharedstate';
 import StartNewChatButton from './startNewChatButton';
-import { EditingMsgStateKey } from './chatMessagesList';
+import { EditingMsgStateKey, InspectingMsgStateKey } from './chatMessagesList';
 
 interface P {
   chat_id: string;
@@ -19,7 +19,8 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
   const can_reply = !!chat_token;
   const [text, setText] = useSharedState("chatText", chat_token ? "" : "Can't add message to this chat.");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
+  const [editingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
+  const [inspectingMsg] = useSharedState<string | null>(InspectingMsgStateKey, null);
 
   function handleChange(_, data) {
     let text = data.value;
@@ -62,7 +63,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     }
   }
 
-  const hide = window.innerHeight <= 800 && editingMsg !== null;
+  const hide = window.innerHeight <= 800 && (editingMsg !== null || inspectingMsg !== null);
 
   return (
     <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "") + (hide ? ` ${classes.hide}` : "")}>
@@ -82,7 +83,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
             >{sugg}</Button>
           );
         })}
-        <div style={{marginLeft: "auto"}} />
+        <div style={{ marginLeft: "auto" }} />
         <StartNewChatButton />
       </div>
       <div className={classes.textRow}>

@@ -1,4 +1,4 @@
-import React, { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as classes from "./messageEdit.module.css";
 import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Radio, RadioGroup, RadioGroupOnChangeData, Skeleton, SkeletonItem, Spinner, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
 import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, ErrorCircle20Regular, ErrorCircle24Regular, SaveRegular } from "@fluentui/react-icons";
@@ -460,14 +460,18 @@ function PhrasingEditor({ phrasings, onChange }: PhrasingEditorP) {
   )
 }
 
-interface P {
+export interface P {
   defaultUpdateId?: string | null;
   message: Message;
   userMessage?: Message;
   onClose: () => void;
 }
 
-export default function MessageEditComponent({ defaultUpdateId, message, userMessage, onClose }: P) {
+export interface R {
+  reset: () => void;
+}
+
+const MessageEditComponent = forwardRef<R, P>(({ defaultUpdateId, message, userMessage, onClose }, ref) => {
   const [error, setError] = useState(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
 
@@ -492,7 +496,8 @@ export default function MessageEditComponent({ defaultUpdateId, message, userMes
         setUpdateId(initialPath[initialPath.length - 1].dialogue_id);
         setParentId(null);
       } else {
-        setInitialPath(inspectionData.prev_reply_path);
+        let initialPath = inspectionData.prev_reply_path;
+        setInitialPath(initialPath);
         setInitialIsCreate(true);
         setParentId(initialPath ? initialPath[initialPath.length - 1].dialogue_id : null);
         setUpdateId(null);
@@ -548,6 +553,12 @@ export default function MessageEditComponent({ defaultUpdateId, message, userMes
     autoScrollUpdate();
   }
 
+  useImperativeHandle(ref, () => {
+    return {
+      reset: handleReset,
+    };
+  }, [handleReset])
+
   return (
     <div className={classes.container}>
       <div className={classes.headingRow}>
@@ -579,4 +590,6 @@ export default function MessageEditComponent({ defaultUpdateId, message, userMes
       </Fragment>
     </div>
   );
-}
+});
+
+export default MessageEditComponent;

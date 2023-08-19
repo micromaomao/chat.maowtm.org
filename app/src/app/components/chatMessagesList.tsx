@@ -1,4 +1,4 @@
-import React from "react";
+import React, { createRef } from "react";
 import { ApiError, DefaultService, Message, MessageType } from "app/openapi";
 import * as classes from "./chatMessagesList.module.css"
 import { Button, Link, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
@@ -8,6 +8,7 @@ import { useSharedState } from "app/utils/sharedstate";
 import { getCredentialManager, useChatCredentials } from "app/utils/credentials";
 import { useChatController } from "./contexts";
 import { useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-toast";
+import type * as MessageEdit from "./messageEdit";
 
 const MessageEditComponent = React.lazy(() => import("./messageEdit"));
 const MessageInspectComponent = React.lazy(() => import("./messageInspect"));
@@ -174,6 +175,7 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
   const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
   const [inspectingMsg, setInspectingMsg] = useSharedState<string | null>(InspectingMsgStateKey, null);
   const [overrideEditUpdateDialogueId, setOverrideEditUpdateDialogueId] = React.useState<string | null>(null);
+  const editComponentRef = createRef<MessageEdit.R>();
   const autoScrollUpdate = useAutoScrollUpdateSignal();
   const hasAdmin = getCredentialManager().has_admin_auth;
   const msg_edit_suspense = (
@@ -217,6 +219,7 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
             setOverrideEditUpdateDialogueId(dialogue_id);
             setEditingMsg(message.id);
             setInspectingMsg(null);
+            editComponentRef.current?.reset();
             autoScrollUpdate();
           };
         }
@@ -251,6 +254,7 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
                   userMessage={lastUserMessage}
                   onClose={handleCloseEdit}
                   defaultUpdateId={overrideEditUpdateDialogueId}
+                  ref={editComponentRef}
                 />
               </React.Suspense>
             ) : null}
