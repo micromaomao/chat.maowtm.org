@@ -219,7 +219,11 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
             setOverrideEditUpdateDialogueId(dialogue_id);
             setEditingMsg(message.id);
             setInspectingMsg(null);
-            editComponentRef.current?.reset();
+            if (overrideEditUpdateDialogueId == dialogue_id) {
+              // Force update in the case where overrideEditUpdateDialogueId
+              // hasn't changed.
+              editComponentRef.current?.reset?.();
+            }
             autoScrollUpdate();
           };
         }

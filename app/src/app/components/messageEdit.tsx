@@ -1,4 +1,4 @@
-import React, { FormEvent, Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { FormEvent, Fragment, createRef, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as classes from "./messageEdit.module.css";
 import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Radio, RadioGroup, RadioGroupOnChangeData, Skeleton, SkeletonItem, Spinner, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
 import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, ErrorCircle20Regular, ErrorCircle24Regular, SaveRegular } from "@fluentui/react-icons";
@@ -9,6 +9,7 @@ import DialoguePathSelectorComponent from "./dialoguePathSelector";
 import { useSharedState } from "app/utils/sharedstate";
 import { fetchDialogueItem, mutateDialogues } from "app/utils/dialogueItemData";
 import { useChatController } from "./contexts";
+import type * as PathSelector from "./dialoguePathSelector";
 
 interface FormP {
   updateId?: string | null;
@@ -399,7 +400,7 @@ function PhrasingEditor({ phrasings, onChange }: PhrasingEditorP) {
       e.preventDefault();
       addBoxRef.current.blur();
       setTimeout(() => {
-        addBoxRef.current?.focus();
+        addBoxRef.current?.focus?.();
       }, 1);
     }
   }
@@ -471,7 +472,7 @@ export interface R {
   reset: () => void;
 }
 
-const MessageEditComponent = forwardRef<R, P>(({ defaultUpdateId, message, userMessage, onClose }, ref) => {
+const MessageEditComponent = forwardRef<R, P>(function MessageEditComponent({ defaultUpdateId, message, userMessage, onClose }, ref) {
   const [error, setError] = useState(null);
   const autoScrollUpdate = useAutoScrollUpdateSignal();
 
@@ -482,6 +483,8 @@ const MessageEditComponent = forwardRef<R, P>(({ defaultUpdateId, message, userM
 
   const [updateId, setUpdateId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
+
+  const pathSelectorRef = createRef<PathSelector.R>();
 
   async function fetchInspectionData(signal: AbortSignal) {
     try {
@@ -504,7 +507,11 @@ const MessageEditComponent = forwardRef<R, P>(({ defaultUpdateId, message, userM
       }
       setInitialReady(true);
       setError(null);
-      autoScrollUpdate();
+      // setTimeout to wait for new prop to be set by React
+      setTimeout(() => {
+        pathSelectorRef.current?.reset?.();
+        autoScrollUpdate();
+      });
     } catch (e) {
       if (signal.aborted) return;
       if (e instanceof ApiError) {
@@ -526,11 +533,16 @@ const MessageEditComponent = forwardRef<R, P>(({ defaultUpdateId, message, userM
       fetchDialogueItem(defaultUpdateId).then(item => {
         if (controller.signal.aborted) return;
         setInitialIsCreate(false);
-        setInitialPath(item.item_data.path);
+        let initialPath = item.item_data.path;
+        setInitialPath(initialPath);
         setParentId(null);
         setUpdateId(defaultUpdateId);
         setInitialReady(true);
         setError(null);
+        // setTimeout to wait for new prop to be set by React
+        setTimeout(() => {
+          pathSelectorRef.current?.reset?.();
+        });
       }, err => {
         if (controller.signal.aborted) return;
         setError(err);
@@ -580,7 +592,7 @@ const MessageEditComponent = forwardRef<R, P>(({ defaultUpdateId, message, userM
       <Fragment>
         {initialReady ? (
           <>
-            <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} />
+            <DialoguePathSelectorComponent initialPath={initialPath} initialIsCreate={initialIsCreate} onChange={handlePathChange} ref={pathSelectorRef} />
             <MessageEditForm
               onReset={handleReset.bind(undefined, true)}
               {...{ updateId, parentId, inspectionData, message, userMessage }}

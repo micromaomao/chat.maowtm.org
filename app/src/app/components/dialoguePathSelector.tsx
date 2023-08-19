@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import * as classes from "./dialoguePathSelector.module.css";
 import { AdminService, DialogueItemDetails, DialoguePathElement, MetadataDialoguePath } from "app/openapi";
 import { Combobox, Option, OptionOnSelectData, ComboboxOpenChangeData } from "@fluentui/react-combobox";
@@ -6,7 +6,7 @@ import { fetchDialogueItem, fetchRootItems } from "app/utils/dialogueItemData";
 import { ErrorCircleRegular, List16Regular, List20Regular } from "@fluentui/react-icons";
 import { Field, Text } from "@fluentui/react-components";
 
-interface P {
+export interface P {
   initialPath: MetadataDialoguePath;
   initialIsCreate: boolean;
   onChange?: (is_create: boolean, item_or_parent_id: string) => void;
@@ -223,14 +223,30 @@ function Row({ selectedOption, hasUpdateParentOption, depth, parentId, onSelect 
   );
 }
 
-export default function DialoguePathSelectorComponent({ initialPath, initialIsCreate, onChange }: P) {
+export interface R {
+  reset: () => void;
+}
+
+const DialoguePathSelectorComponent = forwardRef<R, P>(function DialoguePathSelectorComponent({ initialPath, initialIsCreate, onChange }, ref) {
   let [path, setPath] = useState<MetadataDialoguePath>(initialPath);
   let [isCreate, setIsCreate] = useState<boolean>(initialIsCreate);
 
-  useEffect(() => {
+  function handleReset() {
     setPath(initialPath);
     setIsCreate(initialIsCreate);
+  }
+
+  useEffect(() => {
+    handleReset();
   }, [initialPath, initialIsCreate]);
+
+  useImperativeHandle(ref, () => {
+    return {
+      reset: () => {
+        handleReset();
+      },
+    };
+  }, []);
 
   if (!path) {
     path = [];
@@ -287,4 +303,6 @@ export default function DialoguePathSelectorComponent({ initialPath, initialIsCr
       />
     </div>
   )
-}
+});
+
+export default DialoguePathSelectorComponent;
