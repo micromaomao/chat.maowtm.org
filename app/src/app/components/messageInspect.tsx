@@ -58,7 +58,7 @@ export default function MessageInspectComponent({ message, onClose, onEdit }: P)
             {error.message}
           </Alert>
         ) : (
-          <div className={classes.matchTree}>
+          <div>
             {loading ? (
               <TreeSkeleton />
             ) : (
