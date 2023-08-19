@@ -77,7 +77,10 @@ export function extractSuggestions(message: string): ExtractSuggestionsRes {
       suggestions_list_regex.lastIndex = match.indices[1][0] + m2.index;
       m1 = m1.substring(0, m2.indices[1][1]);
     }
-    suggestions.push(m1.trim());
+    let sugg = m1.trim();
+    if (!suggestions.includes(sugg)) {
+      suggestions.push(sugg);
+    }
   }
   return {
     suggestions,

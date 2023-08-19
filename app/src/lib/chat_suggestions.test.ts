@@ -133,7 +133,26 @@ Suggestion 3: 你有什么爱好？`,
         "你有什么爱好？"
       ],
       message_without_suggestions: "你好！"
-    }
+    },
+    {
+      msg: `In terms of usefulness, I would say Computer Systems or Security.
+In terms of fun, Computer Graphics was quite enjoyable. \n\
+In terms of difficulty, Compilers definitely took the cake.
+Suggestion welcome :)
+
+Suggestion 1: What are your interests/hobbies?
+Suggestion 1: What are your interests/hobbies?
+Suggestion 2: What are your interests/hobbies?
+Suggestion 3: What projects are you working on?`,
+      suggestions: [
+        "What are your interests/hobbies?",
+        "What projects are you working on?"
+      ],
+      message_without_suggestions: `In terms of usefulness, I would say Computer Systems or Security.
+In terms of fun, Computer Graphics was quite enjoyable. \n\
+In terms of difficulty, Compilers definitely took the cake.
+Suggestion welcome :)`
+    },
   ];
 
   for (let test_case of test_cases) {
