@@ -1,6 +1,6 @@
 import React, { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import * as classes from "./messageEdit.module.css";
-import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Skeleton, SkeletonItem, Spinner, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
+import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Radio, RadioGroup, RadioGroupOnChangeData, Skeleton, SkeletonItem, Spinner, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
 import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, ErrorCircle20Regular, ErrorCircle24Regular, SaveRegular } from "@fluentui/react-icons";
 import { AdminService, ApiError, DialogueItemDetails, EditChatRequest, InspectLastEditResult, Message, MetadataDialoguePath } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
@@ -121,7 +121,19 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(recursive: boolean) {
+    if (!updateId) return;
+    setInitialLoad(true);
+    AdminService.deleteDialogueItem(updateId, recursive).then(() => {
+      mutateDialogues();
+      onReset();
+    }, err => {
+      if (err instanceof ApiError) {
+        err = new Error(err.body);
+      }
+      setInitialLoad(false);
+      setSubmitError(err);
+    });
   }
 
   return (
@@ -160,31 +172,33 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
       </Field>
 
       <br />
-      <div className={classes.buttonsRow}>
-        <Button
-          appearance="primary"
-          size="large"
-          icon={!submitting ? <SaveRegular /> : <Spinner size="tiny" />}
-          disabled={hasValidationErr || submitting}
-          onClick={handleSubmit}
-        >
-          Save
-        </Button>
-        <Button
-          appearance="subtle"
-          size="large"
-          onClick={onReset}
-        >
-          Reset
-        </Button>
-        {updateId ? (
-          <DeleteButton
-            item_id={updateId}
-            disabled={submitting}
-            onConfirm={handleDelete}
-          />
-        ) : null}
-      </div>
+      {!initialLoad ? (
+        <div className={classes.buttonsRow}>
+          <Button
+            appearance="primary"
+            size="large"
+            icon={!submitting ? <SaveRegular /> : <Spinner size="tiny" />}
+            disabled={hasValidationErr || submitting}
+            onClick={handleSubmit}
+          >
+            Save
+          </Button>
+          <Button
+            appearance="subtle"
+            size="large"
+            onClick={onReset}
+          >
+            Reset
+          </Button>
+          {updateId ? (
+            <DeleteButton
+              item_id={updateId}
+              disabled={submitting}
+              onConfirm={handleDelete}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {submitError ? (
         <div className={classes.error}>
@@ -195,12 +209,16 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
   );
 }
 
-function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onConfirm: () => void, disabled: boolean }) {
+function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onConfirm: (recursive: boolean) => void, disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [itemData, setItemData] = useState<DialogueItemDetails | null>(null);
+  const [recursive, setRecursive] = useState(false);
   const [error, setError] = useState<Error>(null);
+
   useEffect(() => {
     if (!open) return;
+    setItemData(null);
+    setRecursive(false);
     let cancelled = false;
     fetchDialogueItem(item_id).then(item => {
       if (cancelled) return;
@@ -211,7 +229,17 @@ function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onCon
       setError(err);
     });
     return () => { cancelled = true };
-  }, [open, item_id])
+  }, [open, item_id]);
+
+  function handleRadioChange(e, data: RadioGroupOnChangeData) {
+    setRecursive(data.value == "recursive");
+  }
+
+  function handleConfirm() {
+    setOpen(false);
+    onConfirm(recursive);
+  }
+
   return (
     <Dialog modalType="modal" open={open} onOpenChange={(_, data) => (!disabled ? setOpen(data.open) : undefined)}>
       <DialogTrigger>
@@ -243,7 +271,7 @@ function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onCon
             ) : (
               <>
                 <Body2>
-                  Are you sure you want to delete the following dialogue item? This will also reset the message edit state.
+                  Are you sure you want to delete the following dialogue item?
                 </Body2>
                 <div style={{ height: "10px" }} />
                 <div className={classes.itemDataBox}>
@@ -251,6 +279,23 @@ function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onCon
                   <br />
                   <Body1>&lt; {itemData.item_data.reply}</Body1>
                 </div>
+                {itemData.children.length > 0 ? (() => {
+                  let nb_children = itemData.children.length;
+                  let set_parent_label = `Move ${nb_children} direct children to be under the parent of this item`;
+                  if (itemData.item_data.path.length == 1) {
+                    set_parent_label = `Turn ${nb_children} direct children into root items`;
+                  }
+                  return <>
+                    <div style={{ height: "10px" }} />
+                    <Body2>
+                      This dialogue item has {nb_children} children&hellip;
+                    </Body2>
+                    <RadioGroup value={recursive ? "recursive" : "set_parent"} onChange={handleRadioChange}>
+                      <Radio value="recursive" label="Delete all children recursively as well" />
+                      <Radio value="set_parent" label={set_parent_label} />
+                    </RadioGroup>
+                  </>
+                })() : null}
               </>
             )}
           </DialogContent>
@@ -266,7 +311,7 @@ function DeleteButton({ item_id, onConfirm, disabled }: { item_id: string, onCon
               <DialogTrigger>
                 <Button appearance="secondary" size="medium">Cancel</Button>
               </DialogTrigger>
-              <Button appearance="primary" size="medium">Delete</Button>
+              <Button appearance="primary" size="medium" onClick={handleConfirm}>Delete</Button>
             </>
           )}
         </DialogActions>
@@ -453,9 +498,13 @@ export default function MessageEditComponent({ defaultUpdateId, message, userMes
         setUpdateId(null);
       }
       setInitialReady(true);
+      setError(null);
       autoScrollUpdate();
     } catch (e) {
       if (signal.aborted) return;
+      if (e instanceof ApiError) {
+        e = new Error(e.body);
+      }
       setError(e);
     }
   }
@@ -476,6 +525,7 @@ export default function MessageEditComponent({ defaultUpdateId, message, userMes
         setParentId(null);
         setUpdateId(defaultUpdateId);
         setInitialReady(true);
+        setError(null);
       }, err => {
         if (controller.signal.aborted) return;
         setError(err);

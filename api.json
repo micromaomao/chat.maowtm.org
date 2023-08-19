@@ -675,7 +675,43 @@
           },
           "required": true
         }
-      ]
+      ],
+      "delete": {
+        "summary": "Delete a dialogue item",
+        "description": "In the case where \"recursive\" is set to false, all child items will be moved to under the parent, or become root, if the item being deleted is already root.",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recursive",
+            "description": "Whether to also delete all direct and indirect children.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {},
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "No admin auth"
+          },
+          "404": {
+            "description": "Dialogue item not found"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      }
     },
     "/list-dialogue-items": {
       "get": {
@@ -1198,8 +1234,9 @@
           "children": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MessageMatchResultMatchTree",
-              "type": "string"
+              "type": "object",
+              "properties": {},
+              "description": "Recursive MessageMatchResultMatchTree"
             }
           }
         },

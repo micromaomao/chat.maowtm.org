@@ -7,7 +7,7 @@ import { requireAdminAuth } from "../auth_basics";
 import client_tags from "db/client_tag";
 import { withDBClient, Client as DBClient } from "db/index";
 import { MsgType } from "db/enums";
-import { editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, listAllRoot, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
+import { deleteDialogueItem, editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, listAllRoot, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
 import { DialogueItemInput, InspectLastEditResult } from "./types";
 import { ItemsMatchTree, getCachedMatcher } from "lib/match_dialogue";
 import { ItemsMatchTreeWithText, reconstrucMessageMatchResult } from "lib/chat";
@@ -179,6 +179,24 @@ apiRouter.get("/dialogue-item/:item_id", async (req, res) => {
 apiRouter.get("/list-dialogue-items", async (req, res) => {
   const result = await listAllRoot();
   res.json(result);
+});
+
+apiRouter.delete("/dialogue-item/:item_id", async (req, res) => {
+  const item_id = req.params.item_id;
+  let recursive = false;
+  if (req.query.recursive) {
+    recursive = true;
+  }
+  await withDBClient(async db => {
+    await db.query("begin transaction isolation level serializable");
+    try {
+      await deleteDialogueItem(item_id, recursive, db);
+      await db.query("commit");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+  res.status(204).send();
 });
 
 export default apiRouter;

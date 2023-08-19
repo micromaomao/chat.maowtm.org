@@ -4,7 +4,7 @@ export default function PromiseRouter() {
   let router = Router();
   return new Proxy(router, {
     get(target, p, receiver) {
-      if (["get", "put", "post", "del", "use"].includes(p as string)) {
+      if (["get", "put", "post", "del", "delete", "use"].includes(p as string)) {
         let handlers_start = 1;
         if (p === "use") {
           handlers_start = 0;

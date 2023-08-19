@@ -320,7 +320,15 @@ export async function tracePrevReplyMsgDialoguePath(message_id: string, db: DBCl
     return await traceDialogueItemPath(row.edited_item_id, db);
   }
   if (row.best_match_item_id !== null) {
-    return await traceDialogueItemPath(row.best_match_item_id, db);
+    try {
+      return await traceDialogueItemPath(row.best_match_item_id, db);
+    } catch (e) {
+      if (e instanceof DialogueItemNotFoundError) {
+        return null;
+      } else {
+        throw e;
+      }
+    }
   }
   return null;
 }
@@ -385,4 +393,59 @@ export async function listAllRoot(db?: DBClient): Promise<ListDialogueItemsResul
     }
   }
   return res;
+}
+
+export async function fetchChildrenIds(item_id: string, recursive: boolean, db: DBClient): Promise<string[]> {
+  let children = new Set<string>();
+  let fetch_head = [item_id];
+  let depth = 0;
+  while (fetch_head.length > 0) {
+    if (depth != 0 && !recursive) {
+      break;
+    }
+    let { rows }: { rows: { item_id: string }[] } = await db.query({
+      text: `select item_id from dialogue_item where parent = any($1)`,
+      values: [fetch_head]
+    });
+    if (rows.some(x => children.has(x.item_id))) {
+      throw new Error("Dialogue item parent chain contains a cycle");
+    }
+    for (let row of rows) {
+      children.add(row.item_id);
+    }
+    fetch_head = rows.map(x => x.item_id);
+  }
+  return Array.from(children);
+}
+
+export async function deleteDialogueItem(item_id: string, recursive: boolean, db: DBClient): Promise<void> {
+  let { rows }: { rows: { parent: string }[] } = await db.query({
+    text: "select parent from dialogue_item where item_id = $1",
+    values: [item_id]
+  });
+  if (rows.length == 0) {
+    throw new DialogueItemNotFoundError(item_id);
+  }
+
+  let children = await fetchChildrenIds(item_id, recursive, db);
+
+  if (recursive) {
+    if (process.env.NODE_ENV == "development") {
+      console.log("Deleting dialogue items:", children, item_id);
+    }
+    await db.query({
+      text: "delete from dialogue_item where item_id = any($1) or item_id = $2",
+      values: [children, item_id]
+    });
+  } else {
+    await db.query({
+      text: "update dialogue_item set parent = $1 where parent = $2",
+      values: [rows[0].parent, item_id]
+    })
+    await db.query({
+      text: "delete from dialogue_item where item_id = $1",
+      values: [item_id]
+    });
+  }
+  deleteCachedMatcher();
 }
