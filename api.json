@@ -336,6 +336,51 @@
         }
       ]
     },
+    "/messages/{msg_id}/match-result": {
+      "get": {
+        "summary": "Inspect match result for a reply message",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageMatchResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          },
+          "404": {
+            "description": "Invalid message ID"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "msg_id",
+          "description": "",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ]
+    },
     "/messages/{msg_id}/edit-bot": {
       "put": {
         "summary": "Alter or create dialogue items related to a chat response",
@@ -1103,6 +1148,57 @@
         },
         "required": [
           "groups"
+        ]
+      },
+      "MessageMatchResult": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "match_tree": {
+            "$ref": "#/components/schemas/MessageMatchResultMatchTree"
+          },
+          "has_missing_item": {
+            "type": "boolean"
+          },
+          "has_missing_phrasing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "MessageMatchResultMatchTree": {
+        "type": "object",
+        "properties": {
+          "this_item": {
+            "type": "string",
+            "description": "ID of the dialogue item matched",
+            "example": "01H8725DD9A33W8RGK379M67GB"
+          },
+          "selected_phrasing": {
+            "type": "string",
+            "description": "Text of the phrasing presented to the model"
+          },
+          "max_score": {
+            "type": "number",
+            "description": "Max score among this and child items",
+            "example": 0.999
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageMatchResultMatchTree"
+            }
+          }
+        },
+        "required": [
+          "this_item",
+          "max_score",
+          "selected_phrasing",
+          "children"
         ]
       }
     },

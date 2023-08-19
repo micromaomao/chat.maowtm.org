@@ -15,8 +15,7 @@ export interface MatchDialogueChatHistoryEntry {
 export type SampleInputLine = ChatHistoryInputLine | "---";
 
 export interface MatchDialogueResult {
-  matched_dialogue_items: string[];
-  matched_item_scores: number[];
+  item_matches: ItemMatchResult[];
   direct_result: boolean;
   model_sample_input: SampleInputLine[];
 }
@@ -56,6 +55,15 @@ export interface ItemsMatchTree {
   this_item: CachedDialogueItem;
   selected_phrasing: CachedPhrasing;
   children: ItemsMatchTree[];
+}
+
+export interface ReconstructedItemMatchResult extends ItemMatchResult {
+  missing_phrasing_id?: string;
+}
+
+export interface ReconstructItemMatchesResult {
+  item_matches: ReconstructedItemMatchResult[];
+  missing_items: string[];
 }
 
 export class DialogueMatcher {
@@ -336,11 +344,54 @@ export class DialogueMatcher {
     }
 
     return {
-      matched_dialogue_items: item_matches.map(x => x.item.dialogue_item_id),
-      matched_item_scores: item_matches.map(x => x.score),
+      item_matches,
       direct_result: false,
       model_sample_input: model_input,
     }
+  }
+
+  async reconstructItemMatchResults(item_ids: string[], scores: number[], best_phrasing_ids: string[]): Promise<ReconstructItemMatchesResult> {
+    if (scores.length == 0) {
+      throw new Error("Missing scores");
+    }
+    if (item_ids.length != scores.length) {
+      throw new Error(`Assertion failed: item_ids.length != scores.length`);
+    }
+    let res: ReconstructItemMatchesResult = {
+      item_matches: [],
+      missing_items: [],
+    };
+
+    let phrasing_id_map = new Map<string, CachedPhrasing>();
+    for (let ph of this.phrasings) {
+      phrasing_id_map.set(ph.phrasing_id, ph);
+    }
+
+    for (let i = 0; i < item_ids.length; i += 1) {
+      let item = this.item_id_map.get(item_ids[i]);
+      if (!item) {
+        res.missing_items.push(item_ids[i]);
+        continue;
+      }
+      let missing_phrasing_id = undefined;
+      let best_phrasing = item.canonical_phrasing;
+      if (best_phrasing_ids.length > i) {
+        best_phrasing = phrasing_id_map.get(best_phrasing_ids[i]);
+        if (!best_phrasing) {
+          best_phrasing = item.canonical_phrasing;
+          missing_phrasing_id = best_phrasing_ids[i];
+        }
+      }
+      let m: ReconstructedItemMatchResult = {
+        item,
+        score: scores[i],
+        missing_phrasing_id,
+        best_phrasing,
+      };
+      res.item_matches.push(m);
+    }
+
+    return res;
   }
 
   static async fromDatabase(db: DBClient): Promise<DialogueMatcher> {

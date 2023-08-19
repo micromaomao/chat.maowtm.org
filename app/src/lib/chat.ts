@@ -142,11 +142,17 @@ export async function addChatMessage(message: NewChatMessage, db_client?: DBClie
           reply_msg,
           matched_dialogue_items,
           matched_item_scores,
+          best_phrasing,
           model_chat_inputs,
           direct_result
-        ) values ($1, $2, $3, $4, $5);`,
+        ) values ($1, $2, $3, $4, $5, $6);`,
       values: [
-        id, mtd.matched_dialogue_items, mtd.matched_item_scores, mtd.model_chat_inputs, mtd.direct_result
+        id,
+        mtd.item_matches.map(x => x.item.dialogue_item_id),
+        mtd.item_matches.map(x => x.score),
+        mtd.item_matches.map(x => x.best_phrasing.phrasing_id),
+        mtd.model_chat_inputs,
+        mtd.direct_result
       ]
     });
   }

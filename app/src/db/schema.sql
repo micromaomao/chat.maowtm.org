@@ -150,13 +150,12 @@ create table chat_reply_metadata (
   reply_msg text not null references chat_message (id) on delete cascade primary key,
 
   -- References to dialogue_item
-  matched_dialogue_items text[] not null,
+  matched_dialogue_items ulid[] not null,
   matched_item_scores float8[] not null,
-
-  -- The above 3 fields can be empty / null if no good match
+  best_phrasing ulid[] not null,
 
   -- References to chat_message
-  model_chat_inputs text[] not null,
+  model_chat_inputs ulid[] not null,
 
   -- True if we bypassed the LLM due to high confidence
   direct_result boolean not null default false,
