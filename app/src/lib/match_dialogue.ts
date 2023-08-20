@@ -155,6 +155,12 @@ export class DialogueMatcher {
     return res;
   }
 
+  doRandomization(item_matches: ItemMatchResult[]) {
+    for (let item_match of item_matches) {
+      item_match.score += Math.random() * 0.001;
+    }
+  }
+
   doLookBehind(message_history: MatchDialogueChatHistoryEntry[], item_matches: ItemMatchResult[]) {
     let curr_item_scores = new Map<string, number>();
     for (let item_match of item_matches) {
@@ -361,6 +367,8 @@ export class DialogueMatcher {
       console.log(`Grouped into ${item_matches.length} items:`);
       await debugPrintItemMatches();
     }
+
+    this.doRandomization(item_matches);
 
     this.doLookBehind(message_history, item_matches);
     if (debug_output) {
