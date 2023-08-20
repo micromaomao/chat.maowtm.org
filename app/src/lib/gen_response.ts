@@ -172,10 +172,15 @@ in ${this.session_id}:`, e);
             msg.content as content,
             msg.generation_model as generation_model,
             msg.nb_tokens as nb_tokens,
-            emb.embedding as embedding
+            emb.embedding as embedding,
+            mtd.matched_dialogue_items as matched_dialogue_items,
+            mtd.matched_item_scores as matched_item_scores,
+            mtd.best_phrasing as best_phrasing
           from chat_message msg
           left outer join chat_message_embedding emb
             on msg.id = emb.msg and emb.model = $1
+          left outer join chat_reply_metadata mtd
+            on (msg.msg_type = ${MsgType.Bot} and msg.id = mtd.reply_msg)
           where
             msg.session = $2 and
             msg.exclude_from_generation = false and

@@ -5,11 +5,16 @@ import { norm } from "./vectools";
 import { input2log } from "./utils";
 import { ChatHistoryInputLine } from "./llm/base";
 
+const LOOKBEHIND_LIMIT = 4;
+
 export interface MatchDialogueChatHistoryEntry {
   id: string;
   msg_type: MsgType;
   content: string;
   embedding: number[];
+  matched_dialogue_items?: string[];
+  matched_item_scores?: number[];
+  best_phrasing?: string[];
 }
 
 export type SampleInputLine = ChatHistoryInputLine | "---";
@@ -150,6 +155,68 @@ export class DialogueMatcher {
     return res;
   }
 
+  doLookBehind(message_history: MatchDialogueChatHistoryEntry[], item_matches: ItemMatchResult[]) {
+    let curr_item_scores = new Map<string, number>();
+    for (let item_match of item_matches) {
+      curr_item_scores.set(item_match.item.dialogue_item_id, item_match.score);
+    }
+
+    let all_parent_scores = new Map<string, number>();
+    for (let item_match of item_matches) {
+      let item = item_match.item.parent;
+      while (item !== null) {
+        if (all_parent_scores.has(item.dialogue_item_id)) {
+          break;
+        }
+        all_parent_scores.set(item.dialogue_item_id, curr_item_scores.get(item.dialogue_item_id) ?? 0);
+        item = item.parent;
+      }
+    }
+
+    let lookback_i = 0;
+    for (let msg of message_history) {
+      if (lookback_i >= LOOKBEHIND_LIMIT) {
+        break;
+      }
+      if (msg.msg_type != MsgType.Bot) {
+        continue;
+      }
+
+      if (msg.matched_dialogue_items?.length > 0 && msg.matched_item_scores?.length > 0) {
+        for (let i = 0; i < msg.matched_dialogue_items.length && i < msg.matched_item_scores.length; i += 1) {
+          let item_id = msg.matched_dialogue_items[i];
+          let score = msg.matched_item_scores[i];
+          if (all_parent_scores.has(item_id)) {
+            all_parent_scores.set(item_id, Math.max(all_parent_scores.get(item_id), score));
+          }
+        }
+      }
+
+      lookback_i += 1;
+    }
+
+    for (let item_match of item_matches) {
+      if (item_match.item.parent === null) {
+        continue;
+      }
+
+      let item = item_match.item.parent;
+      let max_parent_score = 0;
+      while (item !== null) {
+        let score = all_parent_scores.get(item.dialogue_item_id);
+        if (score === undefined) {
+          throw new Error(`Assertion failed`);
+        }
+        max_parent_score = Math.max(max_parent_score, score);
+        item = item.parent;
+      }
+
+      item_match.score = Math.min(item_match.score, max_parent_score);
+    }
+
+    item_matches.sort((a, b) => b.score - a.score);
+  }
+
   /**
    * Take a (usually truncated) ranked list of items from best to worst match,
    * and construct the minimum set of dialogue trees that cover all the given
@@ -275,8 +342,8 @@ export class DialogueMatcher {
     }
 
     let item_matches = this.groupIntoItems(batch_sim);
-    if (debug_output) {
-      console.log(`Grouped into ${item_matches.length} items:`);
+
+    async function debugPrintItemMatches() {
       for (let i = 0; i < item_matches.length && i < 5; i += 1) {
         let item_match = item_matches[i];
         let { rows: [res] } = await db.query({
@@ -288,6 +355,17 @@ export class DialogueMatcher {
       if (item_matches.length > 5) {
         console.log(`  ...`);
       }
+    }
+
+    if (debug_output) {
+      console.log(`Grouped into ${item_matches.length} items:`);
+      await debugPrintItemMatches();
+    }
+
+    this.doLookBehind(message_history, item_matches);
+    if (debug_output) {
+      console.log(`After lookbehind:`);
+      await debugPrintItemMatches();
     }
 
     let { trees, all_nodes } = this.itemsToTrees(item_matches, sample_token_limit);

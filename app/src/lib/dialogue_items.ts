@@ -414,6 +414,7 @@ export async function fetchChildrenIds(item_id: string, recursive: boolean, db: 
       children.add(row.item_id);
     }
     fetch_head = rows.map(x => x.item_id);
+    depth += 1;
   }
   return Array.from(children);
 }
@@ -427,9 +428,8 @@ export async function deleteDialogueItem(item_id: string, recursive: boolean, db
     throw new DialogueItemNotFoundError(item_id);
   }
 
-  let children = await fetchChildrenIds(item_id, recursive, db);
-
   if (recursive) {
+    let children = await fetchChildrenIds(item_id, true, db);
     if (process.env.NODE_ENV == "development") {
       console.log("Deleting dialogue items:", children, item_id);
     }
