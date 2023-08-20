@@ -173,9 +173,9 @@ in ${this.session_id}:`, e);
             msg.generation_model as generation_model,
             msg.nb_tokens as nb_tokens,
             emb.embedding as embedding,
-            mtd.matched_dialogue_items as matched_dialogue_items,
+            mtd.matched_dialogue_items::text[] as matched_dialogue_items,
             mtd.matched_item_scores as matched_item_scores,
-            mtd.best_phrasing as best_phrasing
+            mtd.best_phrasing::text[] as best_phrasing
           from chat_message msg
           left outer join chat_message_embedding emb
             on msg.id = emb.msg and emb.model = $1
