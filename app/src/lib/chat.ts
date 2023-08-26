@@ -2,7 +2,7 @@ import getConfigStore from "db/config";
 import { Client as DBClient, withDBClient } from "db/index";
 import * as mq from "db/mq";
 import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
-import { FetchedChatMessage, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
+import { FetchedChatMessage, MsgTypeStr, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
 import { MsgType } from "db/enums";
 import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
@@ -334,5 +334,77 @@ export async function reconstrucMessageMatchResult(message_id: string, db?: DBCl
     nb_nodes: tree.all_nodes.length,
     nb_total_items_matched: reconstructed_res.item_matches.length + reconstructed_res.missing_items.length,
   };
+  return res;
+}
+
+export interface ListSessionsResult {
+  sessions: {
+    session_id: string,
+    last_messages: FetchedChatMessage[],
+  }[],
+  total_sessions: number,
+  total_user_messages: number,
+}
+
+export async function listSessions(limit: number, until: string | null, last_n_messages: number, db?: DBClient): Promise<ListSessionsResult> {
+  if (!db) {
+    return await withDBClient(db => listSessions(limit, until, last_n_messages, db));
+  }
+  let { rows } = await db.query({
+    name: "chats.ts#listSessions#select_sessions",
+    text: `
+      select
+        s_agg.session as session_id,
+        array_agg(row_to_json(m)) as last_messages
+      from (
+        select
+          m.session as session,
+          max(m.id) as last_msg_id
+        from chat_message m
+        where
+          m.msg_type = ${MsgType.User} and
+          ($2::text is null or m.session < $2::text)
+        group by m.session
+        order by last_msg_id desc
+        limit $1
+      ) s_agg,
+      lateral (
+        select * from (
+          select
+            id,
+            msg_type,
+            content,
+            exclude_from_generation
+          from chat_message
+          where
+            session = s_agg.session
+          order by id desc
+          limit $3
+        ) m order by m.id asc
+      ) m
+      group by session
+      order by session desc`,
+    values: [limit, until, last_n_messages],
+  });
+  let res: any = {};
+  for (let row of rows) {
+    for (let m of row.last_messages) {
+      m.msg_type = msgTypeToStr(m.msg_type);
+    }
+  }
+  res.sessions = rows;
+  ({ rows } = await db.query({
+    name: "chats.ts#listSessions#counts",
+    text: `
+      select
+        count(distinct session) as total_sessions,
+        count(*) as total_user_messages
+      from chat_message
+        where msg_type = ${MsgType.User};`
+  }));
+  // type bigint need to be converted to number
+  res.total_sessions = parseInt(rows[0].total_sessions);
+  res.total_user_messages = parseInt(rows[0].total_user_messages);
+
   return res;
 }

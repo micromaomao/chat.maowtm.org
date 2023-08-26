@@ -419,7 +419,7 @@ export class ChatController extends React.Component<P, S> {
   render(): React.ReactNode {
     return (
       <chatControllerContext.Provider value={this}>
-        <SharedStateProvider sessionStorageId={`chat_${this.props.chat_id}`}>
+        <SharedStateProvider sessionStorageId={`chat_${this.props.chat_id}`} key={this.props.chat_id}>
           <div className={classes.container}>
             <div ref={this.containerRef} className={
               classes.messageListContainer +

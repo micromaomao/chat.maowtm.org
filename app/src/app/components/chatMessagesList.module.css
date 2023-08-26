@@ -34,6 +34,7 @@
   background-color: var(--colorPaletteRedBackground1);
   border: 2px solid var(--colorPaletteRedBorder2);
   color: var(--colorPaletteRedForeground1);
+  width: 100%;
   max-width: 1000px;
 }
 
@@ -89,4 +90,8 @@
 .btnDisabled, .btnDisabled:hover, .btnDisabled:active {
   color: var(--colorNeutralForegroundDisabled);
   cursor: not-allowed;
+}
+
+.shortMode {
+  margin: 0;
 }

@@ -10,7 +10,7 @@ import { MsgType } from "db/enums";
 import { deleteDialogueItem, editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, listAllRoot, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
 import { DialogueItemInput, InspectLastEditResult } from "./types";
 import { ItemsMatchTree, getCachedMatcher } from "lib/match_dialogue";
-import { ItemsMatchTreeWithText, reconstrucMessageMatchResult } from "lib/chat";
+import { ItemsMatchTreeWithText, listSessions, reconstrucMessageMatchResult } from "lib/chat";
 import { fetchSuggestions } from "lib/chat_suggestions";
 
 const apiRouter = Router();
@@ -197,6 +197,13 @@ apiRouter.delete("/dialogue-item/:item_id", async (req, res) => {
     }
   });
   res.status(204).send();
+});
+
+apiRouter.get("/list-chat-sessions", async (req, res) => {
+  const limit = (req.query.limit === undefined) ? 1000 : parseInt(req.query.limit as string);
+  const until = req.query.until as string | undefined;
+  let ret = await listSessions(limit, until, 6);
+  res.json(ret);
 });
 
 export default apiRouter;

@@ -1,4 +1,4 @@
-import React, { createRef } from "react";
+import React, { CSSProperties, createRef } from "react";
 import { ApiError, DefaultService, Message, MessageType } from "app/openapi";
 import * as classes from "./chatMessagesList.module.css"
 import { Button, Link, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
@@ -20,6 +20,7 @@ interface MessageComponentProps {
   editing?: boolean;
   handleInspect?: () => void;
   inspecting?: boolean;
+  shortMode?: boolean;
 };
 
 export interface PhantomMessage {
@@ -32,16 +33,27 @@ export interface PhantomMessage {
 export interface Props {
   messages_list: Message[];
   enable_buttons: boolean;
+  shortMode?: boolean;
 }
 
-function getBox(content: string, type: MessageType, strikethrough: boolean) {
+function getBox(content: string, type: MessageType, strikethrough: boolean, shortMode: boolean) {
+  let style: CSSProperties = { whiteSpace: "pre-wrap" };
+  if (shortMode) {
+    style = {
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      display: "inline-block",
+      maxWidth: "100%",
+    };
+  }
   return (
     <div className={classes.box}>
       <Text
         weight={type == MessageType.USER ? "semibold" : "regular"}
         size={400}
         strikethrough={strikethrough}
-        style={{ whiteSpace: "pre-wrap" }}
+        style={style}
       >
         {content}
       </Text>
@@ -86,8 +98,7 @@ export function MessageButton({ show, onClick, icon, title, disabled }) {
   )
 }
 
-export function MessageComponent({ message, enableButtons, handleEdit, editing, handleInspect, inspecting }: MessageComponentProps) {
-  const box = getBox(message.content, message.msg_type, message.exclude_from_generation);
+function ButtonsComponent({ message, handleEdit, editing, handleInspect, inspecting }: MessageComponentProps) {
   const chatController = useChatController();
   const chatToken = useChatCredentials(chatController.session_id);
   const toastController = useToastController();
@@ -112,36 +123,43 @@ export function MessageComponent({ message, enableButtons, handleEdit, editing, 
       );
     }
   }
-  const buttons = (
+  return (
     <div className={classes.buttons}>
       <MessageButton
-        show={enableButtons && handleEdit && message.msg_type == MessageType.BOT && message.metadata}
+        show={handleEdit && message.msg_type == MessageType.BOT && message.metadata}
         onClick={handleEdit}
         icon={message.metadata?.updated_before ? <Edit16Filled /> : <Edit16Regular />}
         title="Improve this message"
         disabled={false}
       />
       <MessageButton
-        show={enableButtons && handleInspect && message.msg_type == MessageType.BOT && message.metadata}
+        show={handleInspect && message.msg_type == MessageType.BOT && message.metadata}
         onClick={handleInspect}
         icon={<ScanText16Regular />}
         title="Show reply analysis"
         disabled={false}
       />
       <MessageButton
-        show={enableButtons && message.msg_type == MessageType.USER && !message.exclude_from_generation && chatToken}
+        show={message.msg_type == MessageType.USER && !message.exclude_from_generation && chatToken}
         onClick={handleRollback}
         icon={<ArrowUndo16Regular />}
         title="Rollback this and below message"
         disabled={rollingBack}
       />
     </div>
-  )
+  );
+}
+
+export function MessageComponent(props: MessageComponentProps) {
+  let { message, enableButtons, editing, inspecting, shortMode } = props;
+  const box = getBox(message.content, message.msg_type, message.exclude_from_generation, shortMode);
+  const buttons = enableButtons ? (<ButtonsComponent {...props} />) : null;
   return (
     <div className={
       classes.message + " " + classes[`msgType_${message.msg_type}`] +
       (message.exclude_from_generation ? ` ${classes.excludedMsg}` : "") +
-      ((editing || inspecting) ? ` ${classes.editingMsg}` : "")
+      ((editing || inspecting) ? ` ${classes.editingMsg}` : "") +
+      (shortMode ? ` ${classes.shortMode}` : "")
     }>
       <OrderBoxAndButtons message_type={message.msg_type} box={box} buttons={buttons} />
     </div>
@@ -149,7 +167,7 @@ export function MessageComponent({ message, enableButtons, handleEdit, editing, 
 }
 
 export function PhantomMessageComponent({ message, onRetry }: { message: PhantomMessage, onRetry: (msg: PhantomMessage) => void }) {
-  const box = getBox(message.content, message.msg_type, false);
+  const box = getBox(message.content, message.msg_type, false, false);
   const buttons = (
     <div className={classes.buttons + " " + classes.phantomButtons}>
       {message.error ? (
@@ -171,7 +189,7 @@ export function PhantomMessageComponent({ message, onRetry }: { message: Phantom
 export const EditingMsgStateKey = "ChatMessageList.editing";
 export const InspectingMsgStateKey = "ChatMessageList.inspecting";
 
-export default function ChatMessagesList({ messages_list, enable_buttons }: Props) {
+export default function ChatMessagesList({ messages_list, enable_buttons, shortMode }: Props) {
   const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
   const [inspectingMsg, setInspectingMsg] = useSharedState<string | null>(InspectingMsgStateKey, null);
   const [overrideEditUpdateDialogueId, setOverrideEditUpdateDialogueId] = React.useState<string | null>(null);
@@ -245,6 +263,7 @@ export default function ChatMessagesList({ messages_list, enable_buttons }: Prop
               editing={editingCurrMsg}
               inspecting={inspectingCurrMsg}
               enableButtons={enable_buttons}
+              shortMode={shortMode}
             />
             {inspectingCurrMsg ? (
               <React.Suspense fallback={msg_edit_suspense}>

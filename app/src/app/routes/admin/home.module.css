@@ -1,0 +1,96 @@
+.stats {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 50px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.statNumber {
+  font-size: 30px;
+}
+
+.latestChatHeading {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 20px;
+}
+
+.latestChatHeading > *:nth-child(2) {
+  position: relative;
+  top: 4px;
+}
+
+.chatSkeleton {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.chats {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 20px;
+}
+
+.chat {
+  cursor: pointer;
+  width: 100%;
+  max-width: 600px;
+  padding: 0;
+}
+
+.chat > a {
+  padding: 10px 20px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+@media (max-width: 1500px) {
+  .chats {
+    flex-direction: column;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+
+  .chat {
+    max-width: 100%;
+  }
+}
+
+.chatMessages {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 10px;
+  width: 100%;
+}
+
+.loadMore {
+  margin: 20px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}

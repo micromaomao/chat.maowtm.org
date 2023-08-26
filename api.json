@@ -827,8 +827,7 @@
           "content": {
             "type": "string",
             "description": "Content of the message",
-            "example": "Hello!",
-            "minLength": 1
+            "example": "Hello!"
           },
           "metadata": {
             "$ref": "#/components/schemas/BriefMessageMetadata"
@@ -1019,25 +1018,13 @@
               "type": "object",
               "properties": {
                 "session_id": {
-                  "type": "string"
+                  "type": "string",
+                  "example": "01H8SEQBJN01M10N6R4WPBZ7KJ"
                 },
-                "last_6_messages": {
+                "last_messages": {
                   "type": "array",
                   "items": {
-                    "type": "object",
-                    "properties": {
-                      "msg_type": {
-                        "$ref": "#/components/schemas/MessageType"
-                      },
-                      "message": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    },
-                    "required": [
-                      "msg_type",
-                      "message"
-                    ]
+                    "$ref": "#/components/schemas/Message"
                   },
                   "description": "Last 6 messages",
                   "maxItems": 6,
@@ -1047,19 +1034,24 @@
               "description": "Preview of a session",
               "required": [
                 "session_id",
-                "last_6_messages"
+                "last_messages"
               ]
             }
           },
-          "total": {
+          "total_sessions": {
             "type": "integer",
             "description": "Total number of sessions on the server",
             "example": 10
+          },
+          "total_user_messages": {
+            "type": "integer",
+            "example": 100
           }
         },
         "required": [
           "sessions",
-          "total"
+          "total_sessions",
+          "total_user_messages"
         ]
       },
       "FetchedDialogueItemData": {
