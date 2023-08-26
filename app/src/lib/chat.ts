@@ -355,7 +355,20 @@ export async function listSessions(limit: number, until: string | null, last_n_m
     text: `
       select
         s_agg.session as session_id,
-        array_agg(row_to_json(m)) as last_messages
+        array(
+          select row_to_json(m) from (
+            select
+              id,
+              msg_type,
+              content,
+              exclude_from_generation
+            from chat_message
+            where
+              session = s_agg.session
+            order by id desc
+            limit $3
+          ) m order by m.id asc
+        ) as last_messages
       from (
         select
           m.session as session,
@@ -367,23 +380,7 @@ export async function listSessions(limit: number, until: string | null, last_n_m
         group by m.session
         order by last_msg_id desc
         limit $1
-      ) s_agg,
-      lateral (
-        select * from (
-          select
-            id,
-            msg_type,
-            content,
-            exclude_from_generation
-          from chat_message
-          where
-            session = s_agg.session
-          order by id desc
-          limit $3
-        ) m order by m.id asc
-      ) m
-      group by session
-      order by session desc`,
+      ) s_agg;`,
     values: [limit, until, last_n_messages],
   });
   let res: any = {};
