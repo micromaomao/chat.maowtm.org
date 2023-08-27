@@ -1,11 +1,12 @@
 import { Button, Caption1, Textarea } from '@fluentui/react-components';
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import * as classes from './messageInputBox.module.css';
 import { LightbulbFilament24Regular, LightbulbFilamentRegular, SendFilled } from '@fluentui/react-icons';
 import { useChatCredentials } from 'app/utils/credentials';
 import { useSharedState } from 'app/utils/sharedstate';
 import StartNewChatButton from './startNewChatButton';
 import { EditingMsgStateKey, InspectingMsgStateKey } from './chatMessagesList';
+import { useWindowSize } from 'app/utils/windowHooks';
 
 interface P {
   chat_id: string;
@@ -38,6 +39,15 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     sendDisabled = true;
   }
 
+  const [focused, setFocused] = useState(false);
+
+  function handleFocused() {
+    setFocused(true);
+  }
+  function handleBlur() {
+    setFocused(false);
+  }
+
   function handleSend() {
     if (sendDisabled) {
       return;
@@ -63,7 +73,9 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     }
   }
 
-  const hide = window.innerHeight <= 800 && (editingMsg !== null || inspectingMsg !== null);
+  const { height } = useWindowSize();
+
+  const hide = height <= 800 && (editingMsg !== null || inspectingMsg !== null) && !focused;
 
   return (
     <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "") + (hide ? ` ${classes.hide}` : "")}>
@@ -94,6 +106,8 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
           size="large"
           disabled={!can_reply}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocused}
+          onBlur={handleBlur}
           ref={textareaRef}
         />
       </div>

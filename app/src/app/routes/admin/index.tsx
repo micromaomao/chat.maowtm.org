@@ -5,6 +5,7 @@ import { SharedStateProvider } from "app/utils/sharedstate";
 import { Tab, TabList, SelectTabEventHandler } from "@fluentui/react-components";
 import { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, PersonFilled, SettingsRegular } from "@fluentui/react-icons";
 import { getCredentialManager } from "app/utils/credentials";
+import { useWindowSize } from "app/utils/windowHooks";
 const HomeIcon = bundleIcon(Home24Filled, Home24Regular);
 
 const path = "/admin";
@@ -55,6 +56,9 @@ function Nav() {
     }
   }
 
+  const { width } = useWindowSize();
+  const smallMode = width < 700;
+
   const onTabSelect: SelectTabEventHandler = (_, tab) => {
     switch (tab.value) {
       case "back":
@@ -75,17 +79,24 @@ function Nav() {
     }
   };
 
+  function constructTab(value: string, label: string, icon: React.ReactElement) {
+    if (smallMode) {
+      return <Tab value={value} icon={icon} title={label} />;
+    }
+    return <Tab value={value} icon={icon}>{label}</Tab>;
+  }
+
   return (
     <TabList size="large" selectedValue={currentValue} vertical={true} onTabSelect={onTabSelect} appearance="transparent">
-      <Tab value="back" icon={<ArrowHookDownLeftRegular />}>Back to chat</Tab>
+      {constructTab("back", "Back to chat", <ArrowHookDownLeftRegular />)}
       {isOnLoginPage ? (
-        <Tab value="login" icon={<PersonFilled />}>Login</Tab>
+        constructTab("login", "Login", <PersonFilled />)
       ) : (
         <>
-          <Tab value="home" icon={<HomeIcon />}>Dashboard</Tab>
-          <Tab value="settings" icon={<SettingsRegular />}>Settings</Tab>
-          <Tab value="debug" icon={<CodeRegular />}>Debug</Tab>
-          <Tab value="logout">Logout</Tab>
+          {constructTab("home", "Dashboard", <HomeIcon />)}
+          {constructTab("settings", "Settings", <SettingsRegular />)}
+          {constructTab("debug", "Debug", <CodeRegular />)}
+          {constructTab("logout", "Logout", null)}
         </>
       )}
     </TabList>
