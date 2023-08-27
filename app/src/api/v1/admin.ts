@@ -12,6 +12,7 @@ import { DialogueItemInput, InspectLastEditResult } from "./types";
 import { ItemsMatchTree, getCachedMatcher } from "lib/match_dialogue";
 import { ItemsMatchTreeWithText, listSessions, reconstrucMessageMatchResult } from "lib/chat";
 import { fetchSuggestions } from "lib/chat_suggestions";
+import { getMetrics } from "lib/metrics";
 
 const apiRouter = Router();
 
@@ -216,6 +217,11 @@ apiRouter.get("/list-chat-sessions", async (req, res) => {
   const limit = (req.query.limit === undefined) ? 1000 : parseInt(req.query.limit as string);
   const until = req.query.until as string | undefined;
   let ret = await listSessions(limit, until, 6);
+  res.json(ret);
+});
+
+apiRouter.get("/metrics", async (req, res) => {
+  let ret = await getMetrics();
   res.json(ret);
 });
 

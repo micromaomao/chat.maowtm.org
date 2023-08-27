@@ -809,6 +809,37 @@
           "required": true
         }
       ]
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Get various statistics",
+        "description": "",
+        "operationId": "",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No admin auth"
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1062,21 +1093,10 @@
                 "last_messages"
               ]
             }
-          },
-          "total_sessions": {
-            "type": "integer",
-            "description": "Total number of sessions on the server",
-            "example": 10
-          },
-          "total_user_messages": {
-            "type": "integer",
-            "example": 100
           }
         },
         "required": [
-          "sessions",
-          "total_sessions",
-          "total_user_messages"
+          "sessions"
         ]
       },
       "FetchedDialogueItemData": {
@@ -1284,6 +1304,25 @@
         "required": [
           "match_result",
           "suggestions"
+        ]
+      },
+      "MetricsResponse": {
+        "type": "object",
+        "properties": {
+          "total_sessions": {
+            "type": "integer"
+          },
+          "total_user_messages": {
+            "type": "integer"
+          },
+          "total_dialogue_items": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_sessions",
+          "total_user_messages",
+          "total_dialogue_items"
         ]
       }
     },

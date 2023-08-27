@@ -341,9 +341,7 @@ export interface ListSessionsResult {
   sessions: {
     session_id: string,
     last_messages: FetchedChatMessage[],
-  }[],
-  total_sessions: number,
-  total_user_messages: number,
+  }[]
 }
 
 export async function listSessions(limit: number, until: string | null, last_n_messages: number, db?: DBClient): Promise<ListSessionsResult> {
@@ -383,25 +381,12 @@ export async function listSessions(limit: number, until: string | null, last_n_m
       ) s_agg;`,
     values: [limit, until, last_n_messages],
   });
-  let res: any = {};
+
   for (let row of rows) {
     for (let m of row.last_messages) {
       m.msg_type = msgTypeToStr(m.msg_type);
     }
   }
-  res.sessions = rows;
-  ({ rows } = await db.query({
-    name: "chats.ts#listSessions#counts",
-    text: `
-      select
-        count(distinct session) as total_sessions,
-        count(*) as total_user_messages
-      from chat_message
-        where msg_type = ${MsgType.User};`
-  }));
-  // type bigint need to be converted to number
-  res.total_sessions = parseInt(rows[0].total_sessions);
-  res.total_user_messages = parseInt(rows[0].total_user_messages);
 
-  return res;
+  return { sessions: rows };
 }

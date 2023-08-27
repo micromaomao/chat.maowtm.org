@@ -1,7 +1,7 @@
 import React, { Suspense } from "react";
 import { Body2, Button, Card, Skeleton, SkeletonItem, Subtitle1, Text, Title2 } from "@fluentui/react-components";
 import * as classes from "./home.module.css";
-import { AdminService, ApiError, ListChatSessionsResponse, Message } from "app/openapi";
+import { AdminService, ApiError, ListChatSessionsResponse, Message, MetricsResponse } from "app/openapi";
 import { Await, Link, defer, useAsyncError, useLoaderData, useNavigate, useRouteError } from "react-router-dom";
 import { Alert } from "@fluentui/react-components/unstable";
 import ChatMessagesList from "app/components/chatMessagesList";
@@ -9,21 +9,21 @@ import { decodeTime } from "ulid";
 import { Humantime } from "app/utils/humantime";
 import StartNewChatButton from "app/components/startNewChatButton";
 import { useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-toast";
+import { transformApiResponse } from "app/utils/apires";
 
 function getSessionList(until?: string) {
-  return AdminService.getListChatSessions(20, until).then(res => res, err => {
-    if (err instanceof ApiError) {
-      return Promise.reject(new Error(err.body));
-    } else {
-      return Promise.reject(err);
-    }
-  })
+  return transformApiResponse(AdminService.getListChatSessions(20, until));
+}
+
+function getMetrics() {
+  return transformApiResponse(AdminService.getMetrics());
 }
 
 export async function loader({ params }) {
   const sessions_data = getSessionList();
+  const metrics = getMetrics();
 
-  return defer({ sessions_data });
+  return defer({ sessions_data, metrics });
 }
 
 function AsyncErrorElement() {
@@ -41,7 +41,7 @@ function AsyncErrorElement() {
 }
 
 export function Component() {
-  const { sessions_data } = useLoaderData() as any;
+  const { sessions_data, metrics } = useLoaderData() as any;
   const [hasMore, setHasMore] = React.useState(true);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [moreData, setMoreData] = React.useState<any[]>([]);
@@ -54,8 +54,8 @@ export function Component() {
           <SkeletonItem />
         </Skeleton>
       }>
-        <Await resolve={sessions_data} errorElement={<AsyncErrorElement />}>
-          {(data: ListChatSessionsResponse) => (
+        <Await resolve={metrics} errorElement={<AsyncErrorElement />}>
+          {(data: MetricsResponse) => (
             <div className={classes.stats}>
               <div className={classes.stat}>
                 <Body2>Total chat sessions</Body2>
@@ -64,6 +64,10 @@ export function Component() {
               <div className={classes.stat}>
                 <Body2>Total user messages</Body2>
                 <Text className={classes.statNumber}>{data.total_user_messages}</Text>
+              </div>
+              <div className={classes.stat}>
+                <Body2>Total dialogue items</Body2>
+                <Text className={classes.statNumber}>{data.total_dialogue_items}</Text>
               </div>
             </div>
           )}
@@ -83,14 +87,13 @@ export function Component() {
         </Skeleton>
       }>
         <Await resolve={sessions_data} errorElement={<AsyncErrorElement />}>
-          {(data: ListChatSessionsResponse) => {
+          {({ sessions: _data_sessions }: ListChatSessionsResponse) => {
+            let sessions = [..._data_sessions, ...moreData];
+
             async function handleLoadMore() {
               if (!hasMore || loadingMore) return;
               setLoadingMore(true);
-              let last = data.sessions[data.sessions.length - 1].session_id;
-              if (moreData.length > 0) {
-                last = moreData[moreData.length - 1].session_id
-              };
+              let last = sessions[sessions.length - 1].session_id;
               try {
                 let more = (await getSessionList(last)).sessions;
                 let newMoreData = [...moreData, ...more];
@@ -111,7 +114,7 @@ export function Component() {
             return (
               <>
                 <div className={classes.chats}>
-                  {data.sessions.concat(moreData).map(s => {
+                  {sessions.map(s => {
                     let link = `/chat/${encodeURIComponent(s.session_id)}`;
                     return (
                       <Card className={classes.chat} key={s.session_id} onClick={() => { }}>
