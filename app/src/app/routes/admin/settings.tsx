@@ -194,7 +194,7 @@ function PromptSettingTab() {
   }
 
   return (
-    <div className={classes.promptContainer}>
+    <div>
       <Field
         label="Prompt template"
         validationMessage={promptValidationError}
