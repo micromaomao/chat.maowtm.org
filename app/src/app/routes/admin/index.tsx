@@ -3,7 +3,7 @@ import { LoaderFunction, Outlet, RouteObject, redirect, useLocation, useNavigate
 import * as classes from "./index.module.css";
 import { SharedStateProvider } from "app/utils/sharedstate";
 import { Tab, TabList, SelectTabEventHandler } from "@fluentui/react-components";
-import { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, PersonFilled, SettingsRegular } from "@fluentui/react-icons";
+import { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, PersonFilled, SettingsRegular, SignOutRegular } from "@fluentui/react-icons";
 import { getCredentialManager } from "app/utils/credentials";
 import { useWindowSize } from "app/utils/windowHooks";
 const HomeIcon = bundleIcon(Home24Filled, Home24Regular);
@@ -96,7 +96,8 @@ function Nav() {
           {constructTab("home", "Dashboard", <HomeIcon />)}
           {constructTab("settings", "Settings", <SettingsRegular />)}
           {constructTab("debug", "Debug", <CodeRegular />)}
-          {constructTab("logout", "Logout", null)}
+          <hr className={classes.hr} />
+          {constructTab("logout", "Logout", <SignOutRegular />)}
         </>
       )}
     </TabList>

@@ -3,7 +3,8 @@
   flex-direction: row;
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 50px;
+  column-gap: 50px;
+  row-gap: 25px;
 }
 
 .stat {

@@ -19,3 +19,10 @@
   padding: 16px;
   overflow: auto;
 }
+
+.hr {
+  margin: 0 auto;
+  border: 0;
+  border-top: 1px solid var(--colorNeutralStroke1);
+  width: 80%;
+}

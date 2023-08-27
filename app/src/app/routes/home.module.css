@@ -41,3 +41,8 @@
 .text {
   text-align: center;
 }
+
+a.adminLogin {
+  color: inherit;
+  text-decoration: none;
+}

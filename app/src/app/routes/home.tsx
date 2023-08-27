@@ -1,9 +1,10 @@
 import React, { Suspense } from "react";
-import { Body1, Body2, Image, Skeleton, SkeletonItem, Title1 } from "@fluentui/react-components";
+import { Body1, Body2, Image, Link as FluentLink, Skeleton, SkeletonItem, Title1 } from "@fluentui/react-components";
 const StartNewChatButton = React.lazy(() => import("app/components/startNewChatButton"));
 import avatarDistored from "app/../../assets/avatar_distorted.png"
 import * as classes from "./home.module.css";
 import { ChatSparkleRegular, PersonCircleRegular, WarningFilled } from "@fluentui/react-icons";
+import { Link } from "react-router-dom";
 
 function Component() {
   return (
@@ -36,6 +37,11 @@ function Component() {
         </Body2>
       </div>
       <Body1>Currently powered by OpenAI.</Body1>
+      <div>
+        <Link to="/admin" className={classes.adminLogin}>
+          <FluentLink>Admin Login</FluentLink>
+        </Link>
+      </div>
     </div >
   );
 }
