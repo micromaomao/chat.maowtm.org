@@ -586,6 +586,16 @@
                   "description": "Configuration object"
                 }
               }
+            },
+            "headers": {
+              "ETag": {
+                "in": "header",
+                "description": "Immutable config version",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
             }
           },
           "401": {
@@ -605,7 +615,16 @@
         "tags": [
           "admin"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "description": "Specify a previous ETag here to ensure safe partial update",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -621,8 +640,14 @@
           "204": {
             "description": "Success"
           },
+          "400": {
+            "description": "Invalid If-Match"
+          },
           "401": {
             "description": "No admin auth"
+          },
+          "412": {
+            "description": "If-Match indicates that there was a race."
           }
         },
         "security": [

@@ -42,6 +42,11 @@ export interface Config {
   global_rate_limit: ChatRateLimitConfig;
 }
 
+export interface ConfigChangeEvent {
+  new_id: string;
+  config: Config;
+}
+
 export class ConfigStore {
   static async defaultConfig(): Promise<Config> {
     let conf: Config = {
@@ -78,6 +83,8 @@ export class ConfigStore {
   }
 
   private cached_config: Config = null;
+  private cached_conf_id: string = null;
+
   private constructor() { }
 
   static async createInstance(): Promise<ConfigStore> {
@@ -86,31 +93,35 @@ export class ConfigStore {
       const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
       if (rows.length == 0) {
         const default_conf = await ConfigStore.defaultConfig();
-        await c.query({
-          text: "insert into global_configuration (config, app_version) values ($1, $2)",
+        let { rows }: { rows: any[] } = await c.query({
+          text: "insert into global_configuration (config, app_version) values ($1, $2) returning id",
           values: [default_conf, APP_VERSION]
         });
         store.cached_config = default_conf;
+        store.cached_conf_id = rows[0].id;
       } else {
-        const { config, app_version: stored_version } = rows[0];
+        const { config, app_version: stored_version, id } = rows[0];
         if (typeof config != "object") {
           throw new Error("Expected config to be a JSON object");
         }
         store.cached_config = config;
+        store.cached_conf_id = id;
         if (stored_version != APP_VERSION) {
           store.cached_config = {
             ...(await ConfigStore.defaultConfig()),
             ...store.cached_config
           };
-          await c.query({
-            text: "insert into global_configuration (config, app_version) values ($1, $2)",
+          let { rows }: { rows: any[] } = await c.query({
+            text: "insert into global_configuration (config, app_version) values ($1, $2) returning id",
             values: [store.cached_config, APP_VERSION]
           });
+          store.cached_conf_id = rows[0].id;
         }
       }
     });
-    mq.queue.on(mq.MSG_APP_CONFIG_CHANGE, data => {
-      store.cached_config = data;
+    mq.queue.on(mq.MSG_APP_CONFIG_CHANGE, (data: ConfigChangeEvent) => {
+      store.cached_config = data.config;
+      store.cached_conf_id = data.new_id;
     });
     return store;
   }
@@ -119,15 +130,47 @@ export class ConfigStore {
     return this.cached_config;
   }
 
-  async updateConfig(new_config: Config) {
-    this.cached_config = new_config;
-    await withDBClient(async c => {
-      await c.query({
-        text: "insert into global_configuration (config, app_version) values ($1, $2)",
-        values: [new_config, APP_VERSION]
-      });
+  get config_id(): string {
+    return this.cached_conf_id;
+  }
+
+  async updateConfig(new_config: Config, if_match?: string): Promise<boolean> {
+    let new_id: string | null = null;
+    let updated = await withDBClient(async c => {
+      await c.query("begin transaction isolation level serializable;");
+      try {
+        if (if_match !== undefined) {
+          let { rows }: { rows: any[] } = await c.query({
+            text: "select id from global_configuration order by id desc limit 1;",
+          });
+          if (rows.length == 0) {
+            throw new Error("No config in database when if_match was specified");
+          }
+          if (rows[0].id != if_match) {
+            return false;
+          }
+        }
+        let { rows }: { rows: any[] } = await c.query({
+          text: "insert into global_configuration (config, app_version) values ($1, $2) returning id",
+          values: [new_config, APP_VERSION]
+        });
+        new_id = rows[0].id;
+        await c.query("commit;");
+        return true;
+      } finally {
+        await c.query("rollback;");
+      }
     });
-    mq.queue.emit(mq.MSG_APP_CONFIG_CHANGE, new_config);
+    if (updated) {
+      this.cached_config = new_config;
+      this.cached_conf_id = new_id;
+      let evt: ConfigChangeEvent = {
+        config: new_config,
+        new_id: new_id!,
+      };
+      mq.queue.emit(mq.MSG_APP_CONFIG_CHANGE, evt);
+    }
+    return updated;
   }
 
   get generation_model(): LLMBase {

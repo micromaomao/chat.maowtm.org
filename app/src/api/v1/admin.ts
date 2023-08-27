@@ -49,14 +49,27 @@ apiRouter.get("/debug-embeddings", async (req, res) => {
 
 apiRouter.get("/global-config", async (req, res) => {
   const config_store = await getConfigStore();
+  res.set("ETag", `"${config_store.config_id}"`);
   res.json(config_store.config);
 });
 
 apiRouter.put("/global-config", async (req, res) => {
   const config_store = await getConfigStore();
   const new_config = req.body;
-  await config_store.updateConfig(new_config);
-  res.status(204).send();
+  let if_match = undefined;
+  if (req.get("If-Match")) {
+    let if_match_hdr = req.get("If-Match")!;
+    if (!/^"[A-Za-z0-9]+"$/.test(if_match_hdr)) {
+      throw new APIValidationError("Invalid If-Match header");
+    }
+    if_match = if_match_hdr.slice(1, -1);
+  }
+  let update_res = await config_store.updateConfig(new_config, if_match);
+  if (update_res) {
+    res.status(204).send();
+  } else {
+    res.status(412).send();
+  }
 });
 
 export async function checkMessageValidForEdit(message_id: string, db: DBClient): Promise<void> {

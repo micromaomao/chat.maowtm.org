@@ -3,7 +3,7 @@ import { LoaderFunction, Outlet, RouteObject, redirect, useLocation, useNavigate
 import * as classes from "./index.module.css";
 import { SharedStateProvider } from "app/utils/sharedstate";
 import { Tab, TabList, SelectTabEventHandler } from "@fluentui/react-components";
-import { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, PersonFilled } from "@fluentui/react-icons";
+import { ArrowHookDownLeftRegular, CodeRegular, bundleIcon, Home24Regular, Home24Filled, PersonFilled, SettingsRegular } from "@fluentui/react-icons";
 import { getCredentialManager } from "app/utils/credentials";
 const HomeIcon = bundleIcon(Home24Filled, Home24Regular);
 
@@ -17,6 +17,10 @@ const children: RouteObject[] = [
   {
     path: "login",
     lazy: () => import("./login"),
+  },
+  {
+    path: "settings",
+    lazy: () => import("./settings"),
   },
   {
     path: "debug",
@@ -79,6 +83,7 @@ function Nav() {
       ) : (
         <>
           <Tab value="home" icon={<HomeIcon />}>Dashboard</Tab>
+          <Tab value="settings" icon={<SettingsRegular />}>Settings</Tab>
           <Tab value="debug" icon={<CodeRegular />}>Debug</Tab>
           <Tab value="logout">Logout</Tab>
         </>
