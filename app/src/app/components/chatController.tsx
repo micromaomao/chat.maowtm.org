@@ -8,7 +8,7 @@ import { Button } from "@fluentui/react-components";
 import { Alert } from "@fluentui/react-components/unstable";
 import ChatMessagesList, { PhantomMessage, PhantomMessageComponent } from "./chatMessagesList";
 import AutoScrollComponent from "./autoScroll";
-import MessageInputBox from "./messageInputBox";
+import * as MessageInputBox from "./messageInputBox";
 import { generateToken } from "lib/secure_token/browser";
 import { MaybeShowTyping } from "./typingAnimation";
 import { SharedStateProvider } from "app/utils/sharedstate";
@@ -77,10 +77,13 @@ export class ChatController extends React.Component<P, S> {
   sseController: AbortController | null = null;
   ssePingTimeout: number | null = null;
 
+  inputBoxRef: RefObject<MessageInputBox.R>;
+
   constructor(props: P) {
     super(props);
     this.state = InitialState;
     this.containerRef = React.createRef();
+    this.inputBoxRef = React.createRef();
 
     this.retryInitialLoad = this.retryInitialLoad.bind(this);
     this.forceUpdate = this.forceUpdate.bind(this);
@@ -404,6 +407,7 @@ export class ChatController extends React.Component<P, S> {
   handlePostRollbackChat(message_id: string) {
     let messages = this.state.messages.slice();
     let idx = messages.findIndex(m => m.id >= message_id);
+    let userText: string | null = null;
     if (idx != -1) {
       for (let i = idx; i < messages.length; i++) {
         if (messages[i].id < message_id) continue;
@@ -411,8 +415,24 @@ export class ChatController extends React.Component<P, S> {
           continue;
         }
         messages[i] = { ...messages[i], exclude_from_generation: true };
+        if (!userText && messages[i].msg_type == MessageType.USER) {
+          userText = messages[i].content;
+        }
       }
       this.setState({ messages: messages });
+    }
+    if (userText) {
+      this.populateInputBoxIfEmpty(userText);
+    }
+  }
+
+  populateInputBoxIfEmpty(content: string) {
+    if (this.inputBoxRef.current) {
+      let box = this.inputBoxRef.current;
+      if (box.text.trim().length == 0) {
+        box.setText(content);
+        box.focus();
+      }
     }
   }
 
@@ -453,7 +473,8 @@ export class ChatController extends React.Component<P, S> {
                 </div>
               ) : null}
             </div>
-            <MessageInputBox
+            <MessageInputBox.Component
+              ref={this.inputBoxRef}
               chat_id={this.props.chat_id}
               suggestions={this.curr_input_suggestions}
               show_shadow={!this.state.scrolling_to_bottom}

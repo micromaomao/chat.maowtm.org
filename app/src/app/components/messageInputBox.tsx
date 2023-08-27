@@ -1,5 +1,5 @@
 import { Button, Caption1, Textarea } from '@fluentui/react-components';
-import React, { useRef, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import * as classes from './messageInputBox.module.css';
 import { LightbulbFilament24Regular, LightbulbFilamentRegular, SendFilled } from '@fluentui/react-icons';
 import { useChatCredentials } from 'app/utils/credentials';
@@ -8,14 +8,20 @@ import StartNewChatButton from './startNewChatButton';
 import { EditingMsgStateKey, InspectingMsgStateKey } from './chatMessagesList';
 import { useWindowSize } from 'app/utils/windowHooks';
 
-interface P {
+export interface P {
   chat_id: string;
   suggestions: string[];
   onSend: (message: string) => void;
   show_shadow?: boolean;
 }
 
-export default function MessageInputBox({ chat_id, suggestions, onSend, show_shadow }: P) {
+export interface R {
+  setText(text: string): void;
+  text: string;
+  focus(): void;
+}
+
+const MessageInputBox = forwardRef<R, P>(({ chat_id, suggestions, onSend, show_shadow }: P, ref) => {
   const chat_token = useChatCredentials(chat_id);
   const can_reply = !!chat_token;
   const [text, setText] = useSharedState("chatText", chat_token ? "" : "Can't add message to this chat.");
@@ -54,7 +60,7 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
     }
     onSend(text);
     setText("");
-    textareaRef.current?.focus();
+    textareaRef.current?.focus?.();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -69,13 +75,23 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
       handleSend();
     } else {
       setText(sugg);
-      textareaRef.current?.focus();
+      textareaRef.current?.focus?.();
     }
   }
 
   const { height } = useWindowSize();
 
   const hide = height <= 800 && (editingMsg !== null || inspectingMsg !== null) && !focused;
+
+  useImperativeHandle(ref, () => ({
+    setText(text) {
+      setText(text);
+    },
+    text,
+    focus() {
+      textareaRef.current?.focus?.();
+    },
+  }), [text]);
 
   return (
     <div className={classes.container + (show_shadow ? ` ${classes.shadow}` : "") + (hide ? ` ${classes.hide}` : "")}>
@@ -118,4 +134,6 @@ export default function MessageInputBox({ chat_id, suggestions, onSend, show_sha
       </div>
     </div>
   )
-}
+});
+
+export const Component = MessageInputBox;
