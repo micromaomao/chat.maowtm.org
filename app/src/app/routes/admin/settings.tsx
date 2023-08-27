@@ -199,6 +199,14 @@ function PromptSettingTab() {
         label="Prompt template"
         validationMessage={promptValidationError}
         validationState={promptValidationError ? "error" : undefined}
+        hint={
+          <>
+            The prompt template is used as the system message at the beginning. It must contain the sample replacement text
+            {replacementText}, which will be replaced with matched dialogue items.<br />
+            You may tell the model to generate up to 3 suggestions in the form "Suggestion 1: ...", one per line at the end of the message.
+            They will be parsed and displayed appropriately to the user.
+          </>
+        }
       >
         <Textarea
           value={prompt}
