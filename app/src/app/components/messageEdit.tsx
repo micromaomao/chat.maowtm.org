@@ -141,7 +141,7 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
     <>
       <Field
         label="Question phrasings"
-        hint="These are the phrases that the user might say to trigger this reply."
+        hint="Enter one or more user input that should trigger this reply."
         size="large"
         validationState={phrasingValidationErr ? "error" : null}
         validationMessage={phrasingValidationErr}
