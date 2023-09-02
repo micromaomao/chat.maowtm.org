@@ -261,6 +261,8 @@ function PromptSettingTab() {
           textarea={{ style: { whiteSpace: "pre-wrap", width: "100%", height: "100%", maxHeight: "unset" } }} />
       </Field>
 
+      <br />
+
       <Field
         label="First message"
         hint="The first message sent by the bot on a newly started session. If left blank, the bot will not send any message at the beginning."
