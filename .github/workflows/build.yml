@@ -1,7 +1,9 @@
 name: Build docker containers
 on:
   push:
-    branches: main
+    branches:
+      - main
+      - chat.maowtm.org
 jobs:
   docker-build-push:
     runs-on: ubuntu-latest
@@ -10,17 +12,23 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v2
+      - run: |
+          MAYBE_BRANCH_NAME=""
+          if [[ "$GITHUB_REF_NAME" != "main" ]]; then
+            MAYBE_BRANCH_NAME="/$GITHUB_REF_NAME"
+          fi
+          echo "MAYBE_BRANCH_NAME=$MAYBE_BRANCH_NAME" >> $GITHUB_ENV
       - name: Build OpenAI gateway service
         run: |
           set -e
           cd openai-bridge
-          docker build . -t ghcr.io/${{ github.repository }}/openai-bridge:${{ github.sha }}
+          docker build . -t ghcr.io/${{ github.repository }}/openai-bridge${MAYBE_BRANCH_NAME}:${{ github.sha }}
       - name: Build main service
         run: |
           set -e
           cp api.json app/
           cd app
-          docker build . -t ghcr.io/${{ github.repository }}/app:${{ github.sha }}
+          docker build . -t ghcr.io/${{ github.repository }}/app${MAYBE_BRANCH_NAME}:${{ github.sha }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
         with:
@@ -31,7 +39,7 @@ jobs:
         run: |
           set -e
           for image in openai-bridge app; do
-            docker push ghcr.io/${{ github.repository }}/$image:${{ github.sha }}
-            docker tag ghcr.io/${{ github.repository }}/$image:${{ github.sha }} ghcr.io/${{ github.repository }}/$image:latest
-            docker push ghcr.io/${{ github.repository }}/$image:latest
+            docker push ghcr.io/${{ github.repository }}/${image}${MAYBE_BRANCH_NAME}:${{ github.sha }}
+            docker tag ghcr.io/${{ github.repository }}/${image}${MAYBE_BRANCH_NAME}:${{ github.sha }} ghcr.io/${{ github.repository }}/${image}${MAYBE_BRANCH_NAME}:latest
+            docker push ghcr.io/${{ github.repository }}/${image}${MAYBE_BRANCH_NAME}:latest
           done
