@@ -1,10 +1,14 @@
 import type { CSSProperties } from "react";
-import { Body1, Body2, Image, Title1 } from "@fluentui/react-components";
-import { ChatSparkleRegular, PersonCircleRegular, WarningFilled } from "@fluentui/react-icons";
+import { Body2, BrandVariants, Image, Title1, Title2 } from "@fluentui/react-components";
+import { EditRegular } from "@fluentui/react-icons";
 
 const API_BASE = '/api/v1';
 
-import iconUrl from "../../assets/icon.png"
+// Consider also changing the <title> tag in app/src/index.html
+const PROJECT_NAME = "Yet another chatbot";
+
+// If you change the URL here, consider also changing the <meta rel="icon"> tag in index.html.
+import iconUrl from "../../assets/icon.svg"
 
 const css: Record<string, CSSProperties> = {
   box: {
@@ -15,7 +19,7 @@ const css: Record<string, CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "space-evenly",
-    width: "500px",
+    width: "700px",
     maxWidth: "100%",
     height: "auto",
     gap: "15px"
@@ -28,43 +32,73 @@ const css: Record<string, CSSProperties> = {
     flexGrow: 0,
   },
   text: {
-    textAlign: "center"
+    maxWidth: "700px",
   }
 };
 
 export function HomePageHeader() {
   return (<>
     <Image src={iconUrl} style={{ width: "100px", height: "100px" }} fit="contain" />
-    <Title1 align="center">Chat with an AI version of me</Title1>
+    <Title1 align="center">{PROJECT_NAME}</Title1>
   </>);
 }
+
+// For a list of icons available in Fluent UI, see:
+// https://react.fluentui.dev/?path=/docs/concepts-developer-icons-icons-catalog--page
 
 export function HomePageFooter() {
   return (<>
     <div style={{ height: "20px", flexShrink: "1", flexGrow: "0" }} />
+    <Title2 align="center">Getting started&hellip;</Title2>
     <div style={css.box}>
-      <ChatSparkleRegular style={css.icon} />
+      <EditRegular style={css.icon} />
       <Body2 style={css.text}>
-        You can ask it questions about me personally, and in many cases it is
-        capable of generating a good answer.
+        To start building your chatbot, click "Admin Login" below and follow the
+        instruction to log in as admin to change the prompt and other settings,
+        and start chatting! <br style={{ marginBottom: "10px" }} />
+
+        As you chat with the chatbot, you can provide additional ad-hoc stored
+        sample responses by clicking on the <EditRegular style={{
+          transform:
+            "translateY(2px)"
+        }} /> icon next to a message. Try experimenting with different ways of
+        phrasing input text and responses to get the best result. Stored
+        responses are organized in a tree, and this will influence how the
+        sample is matched with the user input. <br style={{ marginBottom: "10px" }} />
+
+        Stored responses, as well as all other settings, are only visible and
+        editable by admin.
       </Body2>
     </div>
-    <div style={css.box}>
-      <WarningFilled style={css.icon} />
-      <Body2 style={css.text}>
-        Due to how LLM works, generated output may not be true, or may be
-        complete nonsense. Please do not take anything seriously.
-      </Body2>
-    </div>
-    <div style={css.box}>
-      <PersonCircleRegular style={css.icon} />
-      <Body2 style={css.text}>
-        Your chat with the AI is completely anonymous, but messages may be
-        used later to fine-tune the AI. This allows me to improve it further.
-      </Body2>
-    </div>
-    <Body1>Currently powered by OpenAI.</Body1>
+    <Body2 style={css.text}>
+      Most backend settings are changable in the admin interface. However, to
+      change this page, you must fork the project and change
+      client_config.tsx, then build your own version of the container.
+    </Body2>
   </>);
 }
 
-export { API_BASE };
+// You can use the Fluent UI Theme Designer to generate a color theme:
+// https://react.fluentui.dev/?path=/docs/themedesigner--page
+// You just need the BrandVariants bit.
+
+const maochatTheme: BrandVariants = {
+  10: "#020402",
+  20: "#101C15",
+  30: "#162E21",
+  40: "#1A3C29",
+  50: "#1D4A32",
+  60: "#1F583B",
+  70: "#226745",
+  80: "#24774E",
+  90: "#258658",
+  100: "#269662",
+  110: "#33A66E",
+  120: "#57B281",
+  130: "#75BF95",
+  140: "#90CCA8",
+  150: "#ABD8BD",
+  160: "#C6E4D1"
+};
+
+export { API_BASE, maochatTheme, PROJECT_NAME };

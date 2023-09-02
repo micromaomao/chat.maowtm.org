@@ -1,5 +1,5 @@
 import React, { Suspense } from "react";
-import { Link as FluentLink, Skeleton, SkeletonItem } from "@fluentui/react-components";
+import { Skeleton, SkeletonItem } from "@fluentui/react-components";
 const StartNewChatButton = React.lazy(() => import("app/components/startNewChatButton"));
 import * as classes from "./home.module.css";
 import { Link } from "react-router-dom";
@@ -15,7 +15,7 @@ function Component() {
       <HomePageFooter />
       <div>
         <Link to="/admin" className={classes.adminLogin}>
-          <FluentLink>Admin Login</FluentLink>
+          Admin Login
         </Link>
       </div>
     </div >

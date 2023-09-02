@@ -17,6 +17,15 @@
 }
 
 a.adminLogin {
-  color: inherit;
+  color: var(--colorBrandForegroundLink);
   text-decoration: none;
+}
+
+a.adminLogin:hover {
+  color: var(--colorBrandForegroundLinkHover);
+}
+
+a.adminLogin:hover:active {
+  color: var(--colorNeutralForeground2LinkPressed);
+  text-decoration: underline;
 }
