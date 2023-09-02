@@ -1,10 +1,9 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogOpenChangeData, DialogSurface, DialogTitle, Field, SelectTabData, Skeleton, SkeletonItem, Tab, TabList, Textarea, TextareaOnChangeData, Title2, Toast, ToastBody, ToastTitle, useToastController } from "@fluentui/react-components";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogOpenChangeData, DialogSurface, DialogTitle, Field, Input, SelectTabData, Skeleton, SkeletonItem, Tab, TabList, Textarea, TextareaOnChangeData, Title2, Toast, ToastBody, ToastTitle, useToastController } from "@fluentui/react-components";
 
 import * as classes from "./settings.module.css";
 import { useSharedState } from "app/utils/sharedstate";
 import { BracesFilled, TextboxRegular } from "@fluentui/react-icons";
-import { OpenAPI } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
 import { adminLoadCurrentConfig, adminUpdateConfig } from "app/utils/config";
 
@@ -94,7 +93,7 @@ function Component() {
           <ConfigTabList
             {...{ currentTab, edited, doSelectTab }}
             tabs={{
-              prompt: { icon: <TextboxRegular />, label: "Prompt" },
+              prompt: { icon: <TextboxRegular />, label: "Prompt template & first message" },
               rawConfig: { icon: <BracesFilled />, label: "Edit JSON config" },
             }}
           />
@@ -188,25 +187,57 @@ function PromptSettingTab() {
     }
     return undefined;
   }, [prompt]);
+  const getFirstMessageStateDefault = () => {
+    if (config.init_messages.length > 0 && config.init_messages[0][0] === 0) {
+      return {
+        defined: true,
+        value: config.init_messages[0][1],
+      };
+    } else {
+      return {
+        defined: false,
+        value: "",
+      };
+    }
+  };
+  const [firstMessageState, setFirstMessageState] = useState<{
+    defined: boolean;
+    value: string;
+  }>(useMemo(getFirstMessageStateDefault, []));
+  const firstMessageValidationError = useMemo<string | undefined>(() => {
+    if (firstMessageState.defined && firstMessageState.value.trim().length == 0) {
+      return "Message cannot be empty";
+    }
+  }, [firstMessageState]);
 
-  function handleChange(evt, data: TextareaOnChangeData) {
+  function handlePromptChange(evt, data: TextareaOnChangeData) {
     setPrompt(data.value);
     markEdited();
   }
 
   function handleReset() {
     setPrompt(config.prompt_template);
+    setFirstMessageState(getFirstMessageStateDefault());
     markEdited(false);
   }
 
   function handleSave() {
     save(conf => {
+      let init_messages;
+      if (firstMessageState.defined) {
+        init_messages = [[0, firstMessageState.value]];
+      } else {
+        init_messages = [];
+      }
       return {
         ...conf,
         prompt_template: prompt,
+        init_messages,
       };
     });
   }
+
+  const firstMessageInputRef = useRef<HTMLInputElement>();
 
   return (
     <div>
@@ -225,14 +256,52 @@ function PromptSettingTab() {
       >
         <Textarea
           value={prompt}
-          onChange={handleChange}
+          onChange={handlePromptChange}
           style={{ whiteSpace: "pre-wrap", width: "100%", height: "500px" }}
           textarea={{ style: { whiteSpace: "pre-wrap", width: "100%", height: "100%", maxHeight: "unset" } }} />
+      </Field>
+
+      <Field
+        label="First message"
+        hint="The first message sent by the bot on a newly started session. If left blank, the bot will not send any message at the beginning."
+        validationMessage={firstMessageValidationError}
+        validationState={firstMessageValidationError ? "error" : undefined}
+      >
+        <Checkbox
+          checked={firstMessageState.defined}
+          onChange={(evt, data) => {
+            setFirstMessageState({
+              ...firstMessageState,
+              defined: !!data.checked,
+            });
+            markEdited();
+            if (data.checked) {
+              setTimeout(() => {
+                firstMessageInputRef.current?.focus?.();
+              });
+            }
+          }}
+          label="Send first message"
+        />
+        <br />
+        <Textarea
+          disabled={!firstMessageState.defined}
+          value={firstMessageState.value}
+          onChange={(evt, data) => {
+            setFirstMessageState({
+              ...firstMessageState,
+              value: data.value,
+            });
+            markEdited();
+          }}
+          style={{ width: "100%" }}
+          ref={firstMessageInputRef}
+        />
       </Field>
       <div className={classes.saveRow}>
         <Button
           appearance="primary"
-          disabled={saving || !!promptValidationError}
+          disabled={saving || !!promptValidationError || !!firstMessageValidationError}
           onClick={handleSave}>
           Save
         </Button>
