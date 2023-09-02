@@ -1,4 +1,4 @@
-import React, { CSSProperties, createRef } from "react";
+import React, { CSSProperties, useRef } from "react";
 import { ApiError, DefaultService, Message, MessageType } from "app/openapi";
 import * as classes from "./chatMessagesList.module.css"
 import { Button, Link, Skeleton, SkeletonItem, Spinner, Text, Tooltip } from "@fluentui/react-components";
@@ -193,7 +193,7 @@ export default function ChatMessagesList({ messages_list, enable_buttons, shortM
   const [editingMsg, setEditingMsg] = useSharedState<string | null>(EditingMsgStateKey, null);
   const [inspectingMsg, setInspectingMsg] = useSharedState<string | null>(InspectingMsgStateKey, null);
   const [overrideEditUpdateDialogueId, setOverrideEditUpdateDialogueId] = React.useState<string | null>(null);
-  const editComponentRef = createRef<MessageEdit.R>();
+  const editComponentRef = useRef<MessageEdit.R>();
   const autoScrollUpdate = useAutoScrollUpdateSignal();
   const hasAdmin = getCredentialManager().has_admin_auth;
   const msg_edit_suspense = (

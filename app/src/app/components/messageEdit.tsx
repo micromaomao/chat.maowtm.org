@@ -1,4 +1,4 @@
-import React, { FormEvent, Fragment, createRef, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { FormEvent, Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as classes from "./messageEdit.module.css";
 import { Body1, Body2, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Radio, RadioGroup, RadioGroupOnChangeData, Skeleton, SkeletonItem, Spinner, Subtitle1, Subtitle2, Textarea } from "@fluentui/react-components";
 import { Add20Filled, ArrowUp20Filled, Delete20Regular, DeleteRegular, DismissRegular, ErrorCircle20Regular, ErrorCircle24Regular, SaveRegular } from "@fluentui/react-icons";
@@ -484,7 +484,7 @@ const MessageEditComponent = forwardRef<R, P>(function MessageEditComponent({ de
   const [updateId, setUpdateId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
 
-  const pathSelectorRef = createRef<PathSelector.R>();
+  const pathSelectorRef = useRef<PathSelector.R>();
 
   async function fetchInspectionData(signal: AbortSignal) {
     try {
