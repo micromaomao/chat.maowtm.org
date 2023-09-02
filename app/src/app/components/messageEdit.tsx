@@ -146,10 +146,16 @@ function MessageEditForm({ updateId, parentId, message, userMessage, inspectionD
         validationState={phrasingValidationErr ? "error" : null}
         validationMessage={phrasingValidationErr}
       >
-        <PhrasingEditor
-          phrasings={phrasings}
-          onChange={setPhrasings}
-        />
+        {initialLoad ? (
+          <Skeleton>
+            <SkeletonItem />
+          </Skeleton>
+        ) : (
+          <PhrasingEditor
+            phrasings={phrasings}
+            onChange={setPhrasings}
+          />
+        )}
       </Field>
       <br />
       <Field

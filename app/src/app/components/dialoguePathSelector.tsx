@@ -246,7 +246,7 @@ const DialoguePathSelectorComponent = forwardRef<R, P>(function DialoguePathSele
         handleReset();
       },
     };
-  }, []);
+  }, [handleReset]);
 
   if (!path) {
     path = [];
