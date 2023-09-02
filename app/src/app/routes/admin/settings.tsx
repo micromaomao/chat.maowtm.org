@@ -6,19 +6,7 @@ import { useSharedState } from "app/utils/sharedstate";
 import { BracesFilled, TextboxRegular } from "@fluentui/react-icons";
 import { OpenAPI } from "app/openapi";
 import { Alert } from "@fluentui/react-components/unstable";
-
-function loadCurrentConfig(): Promise<{ id: string, config: any }> {
-  return fetch("/api/v1/global-config", { headers: { ...OpenAPI.HEADERS } }).then(async r => {
-    if (r.status != 200) {
-      let body = await r.text();
-      throw new Error(`Failed to load config: ${r.status} ${r.statusText} - ${body}`);
-    } else {
-      let config = await r.json();
-      let id = r.headers.get("ETag");
-      return { id, config };
-    }
-  });
-}
+import { adminLoadCurrentConfig, adminUpdateConfig } from "app/utils/config";
 
 interface ConfigContext {
   loading: boolean;
@@ -49,7 +37,7 @@ function Component() {
   function handleConfigRefresh() {
     setConfigCtx({ loading: true, saving: false });
     setEdited(false);
-    loadCurrentConfig().then(({ id, config }) => {
+    adminLoadCurrentConfig().then(({ id, config }) => {
       setConfigCtx({ config, configId: id, loading: false, saving: false });
     }, err => {
       setConfigCtx({ error: err, loading: false, saving: false });
@@ -57,45 +45,17 @@ function Component() {
   }
 
   async function handleSave(updateFunction: (config: any) => any) {
-    if (!configCtx.config) {
-      return;
-    }
-    let tries = 0;
-    let updatedConfig = updateFunction(configCtx.config);
-    let ifMatch = configCtx.configId;
-    setConfigCtx({ ...configCtx, saving: true });
     try {
-      while (tries < 2) {
-        let res = await fetch("/api/v1/global-config", {
-          headers: {
-            ...OpenAPI.HEADERS,
-            "If-Match": ifMatch,
-            "Content-Type": "application/json"
-          },
-          method: "PUT",
-          body: JSON.stringify(updatedConfig),
-        });
-        if (res.status == 200 || res.status == 204) {
-          toastController.dispatchToast(
-            <Toast>
-              <ToastTitle>Settings saved</ToastTitle>
-            </Toast>,
-            { intent: "success" }
-          );
-          setConfigCtx({ ...configCtx, saving: false });
-          handleConfigRefresh();
-          return;
-        }
-        if (res.status == 412) {
-          let latestConfig = await loadCurrentConfig();
-          updatedConfig = updateFunction(latestConfig.config);
-          ifMatch = latestConfig.id;
-          tries += 1;
-          continue;
-        }
-        let body = await res.text();
-        throw new Error(`${res.status} ${res.statusText} ${body}`);
-      }
+      await adminUpdateConfig(updateFunction, configCtx.config, configCtx.configId);
+      toastController.dispatchToast(
+        <Toast>
+          <ToastTitle>Settings saved</ToastTitle>
+        </Toast>,
+        { intent: "success" }
+      );
+      setConfigCtx({ ...configCtx, saving: false });
+      handleConfigRefresh();
+      return;
     } catch (e) {
       setConfigCtx({ ...configCtx, saving: false });
       toastController.dispatchToast(
