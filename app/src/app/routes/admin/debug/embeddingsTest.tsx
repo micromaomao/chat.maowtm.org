@@ -6,7 +6,7 @@ import { useSharedState } from "app/utils/sharedstate";
 import { PureComponent, RefObject, createContext, createRef, useContext, useEffect, useState } from "react";
 
 import * as styles from "./embeddings.module.css";
-import { API_BASE } from "app/consts";
+import { API_BASE } from "app/client_config";
 import { AdminService, ApiError } from "app/openapi";
 
 const setBestMatchHighlightContext = createContext<any>(null);
