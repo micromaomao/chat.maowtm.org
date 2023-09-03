@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - chat.maowtm.org
+      - yuki.maowtm.org
 jobs:
   docker-build-push:
     runs-on: ubuntu-latest
