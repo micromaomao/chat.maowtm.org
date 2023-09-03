@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Body2, BrandVariants, Image, Title1, Title2 } from "@fluentui/react-components";
+import { Body1, Body2, BrandVariants, Image, Link, Title1, Title2 } from "@fluentui/react-components";
 import { EditRegular } from "@fluentui/react-icons";
 
 const API_BASE = '/api/v1';
@@ -33,6 +33,9 @@ const css: Record<string, CSSProperties> = {
   },
   text: {
     maxWidth: "700px",
+    marginTop: "0",
+    marginBottom: "0",
+    textAlign: "center"
   }
 };
 
@@ -49,26 +52,38 @@ export function HomePageHeader() {
 export function HomePageFooter() {
   return (<>
     <div style={{ height: "20px", flexShrink: "1", flexGrow: "0" }} />
-    <div style={css.box}>
-      Entertainment purpose only. Currently powered by OpenAI.
-    </div>
+    <Body2 style={css.text}>
+      Created by <Link href="https://maowtm.org" rel="me"
+      target="_blank">maowtm</Link> based on <Link
+      href="https://chat.maowtm.org" target="_blank">MaoChat</Link>. <Link
+      href="https://github.com/micromaomao/chat.maowtm.org">Source code on
+      GitHub</Link>
+    </Body2>
+    <Body1 style={css.text}>
+      Messages are anonymous, but may be used for improving the bot. <br />
+      Currently powered by OpenAI.
+    </Body1>
+
+    <Body2 style={css.text}>Yuki best girl!</Body2>
   </>);
 }
+
+// #be7ca1
 
 // You can use the Fluent UI Theme Designer to generate a color theme:
 // https://react.fluentui.dev/?path=/docs/themedesigner--page
 // You just need the BrandVariants bit.
 
 const maochatTheme: BrandVariants = {
-  10: "#0A0006",
-  20: "#21131B",
-  30: "#321F2B",
-  40: "#402A38",
-  50: "#4E3645",
-  60: "#5C4252",
-  70: "#6A4E5F",
-  80: "#795B6D",
-  90: "#87687B",
+  10: "#050203",
+  20: "#1F131A",
+  30: "#351E2B",
+  40: "#462739",
+  50: "#7c4565",
+  60: "#904f75",
+  70: "#a7698d",
+  80: "#b16f96",
+  90: "#b47c9e",
   100: "#967689",
   110: "#A58498",
   120: "#B492A6",
