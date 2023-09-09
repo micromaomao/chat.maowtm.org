@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Body1, Body2, BrandVariants, Image, Title1 } from "@fluentui/react-components";
+import { Body1, Body2, BrandVariants, Image, Link, Title1 } from "@fluentui/react-components";
 import { ChatSparkleRegular, PersonCircleRegular, WarningFilled } from "@fluentui/react-icons";
 
 const API_BASE = '/api/v1';
@@ -32,7 +32,8 @@ const css: Record<string, CSSProperties> = {
     flexGrow: 0,
   },
   text: {
-    textAlign: "center"
+    textAlign: "center",
+    maxWidth: "550px",
   }
 };
 
@@ -52,25 +53,32 @@ export function HomePageFooter() {
     <div style={css.box}>
       <ChatSparkleRegular style={css.icon} />
       <Body2 style={css.text}>
-        You can ask it questions about me personally, and in many cases it is
+        You can ask it personal questions about me, and in many cases it is
         capable of generating a good answer.
       </Body2>
     </div>
     <div style={css.box}>
       <WarningFilled style={css.icon} />
       <Body2 style={css.text}>
-        Due to how LLM works, generated output may not be true, or may be
-        complete nonsense. Please do not take anything seriously.
+        <b>Due to how LLM works, generated output <i>and</i> suggestions may not be true, or may be
+          complete nonsense. Please do not take anything it says seriously.</b> This is just a proof of concept.
       </Body2>
     </div>
     <div style={css.box}>
       <PersonCircleRegular style={css.icon} />
-    <Body2 style={css.text}>
+      <Body2 style={css.text}>
         Your chat with the AI is completely anonymous, but messages may be
         used later to fine-tune the AI. This allows me to improve it further.
-    </Body2>
+      </Body2>
     </div>
-    <Body1>Currently powered by OpenAI.</Body1>
+    <Body2 style={css.text}>
+      Currently powered by OpenAI. Source code <Link href="https://github.com/micromaomao/chat.maowtm.org" target="_blank">
+        available on GitHub
+      </Link>, and at some point in the near future I will probably write a blog article about how this was built&hellip;
+    </Body2>
+    <Body1 style={css.text}>
+      Also check out the <Link href="https://yuki.maowtm.org" target="_blank">Yuki bot</Link>!
+    </Body1>
   </>);
 }
 
