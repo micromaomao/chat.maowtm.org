@@ -1,0 +1,24 @@
+.container {
+  flex-shrink: 1;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  border-radius: 5px;
+  border: solid 2px var(--colorBrandForeground1);
+  padding: 8px 14px;
+  cursor: pointer;
+  color: var(--colorBrandForegroundLink);
+  box-shadow: 0 2px 4px var(--colorNeutralShadowAmbient);
+}
+
+.container:hover {
+  color: var(--colorBrandForegroundLinkHover);
+  border-color: var(--colorBrandForeground1Hover);
+}
+
+.container:hover:active {
+  color: var(--colorBrandForegroundLinkPressed);
+  border-color: var(--colorBrandForeground1Pressed);
+}
