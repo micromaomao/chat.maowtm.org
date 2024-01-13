@@ -15,6 +15,7 @@ import { SharedStateProvider } from "app/utils/sharedstate";
 import { fetchEventSource } from "@microsoft/fetch-event-source"
 import { chatControllerContext } from "./contexts";
 import { clearReplyAnalysisCache } from "app/utils/replyAnalysis";
+import ChatInitialBanner from "./chatInitialBanner";
 
 async function fetchChatData(chat_id: string): Promise<ChatSession> {
   const chat_token = getCredentialManager().getChatTokenFor(chat_id);
@@ -436,6 +437,16 @@ export class ChatController extends React.Component<P, S> {
     }
   }
 
+  simulateInputBoxSuggestion(suggestion: string) {
+    if (this.inputBoxRef.current) {
+      this.inputBoxRef.current.selectSuggestion(suggestion);
+    }
+  }
+
+  shouldShowInitialBanner(): boolean {
+    return this.state.messages.every(m => m.msg_type == MessageType.BOT);
+  }
+
   render(): React.ReactNode {
     return (
       <chatControllerContext.Provider value={this}>
@@ -449,6 +460,9 @@ export class ChatController extends React.Component<P, S> {
             }>
               {this.state.messages.length > 0 ? (
                 <AutoScrollComponent containerRef={this.containerRef} onUserScroll={this.setUserScrollState}>
+                  {this.shouldShowInitialBanner() ? (
+                    <ChatInitialBanner />
+                  ) : null}
                   <ChatMessagesList messages_list={this.state.messages} enable_buttons={true} />
                   {this.state.inTransitMessages.map(msg => (
                     <PhantomMessageComponent key={msg.client_tag} message={msg} onRetry={this.handleSendPhantom} />

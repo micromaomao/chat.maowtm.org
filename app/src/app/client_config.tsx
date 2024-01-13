@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Body1, Body2, BrandVariants, Image, Link, Title1 } from "@fluentui/react-components";
+import { Body1, Body2, BrandVariants, Image, Link, Title1, Title3 } from "@fluentui/react-components";
 import { ChatSparkleRegular, PersonCircleRegular, WarningFilled } from "@fluentui/react-icons";
 
 const API_BASE = '/api/v1';
@@ -9,6 +9,7 @@ const PROJECT_NAME = "MaoChat";
 
 // If you change the URL here, consider also changing the <meta rel="icon"> tag in index.html.
 import iconUrl from "../../assets/icon.png"
+import SugBtn from "./components/initialBannerSuggestionButton";
 
 const css: Record<string, CSSProperties> = {
   box: {
@@ -34,6 +35,15 @@ const css: Record<string, CSSProperties> = {
   text: {
     textAlign: "center",
     maxWidth: "550px",
+  },
+  suggestionGrid: {
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: "10px",
+    width: "100%",
+    maxWidth: "1000px",
+    margin: "10px auto",
   }
 };
 
@@ -79,6 +89,20 @@ export function HomePageFooter() {
     <Body1 style={css.text}>
       Also check out the <Link href="https://yuki.maowtm.org" target="_blank">Yuki bot</Link>!
     </Body1>
+  </>);
+}
+
+export function ChatInitialBannerContent() {
+  return (<>
+    <Title3 style={{ fontWeight: "normal" }}>Need ideas?</Title3>
+    <div style={css.suggestionGrid}>
+      <SugBtn>What is your favourite programming language?</SugBtn>
+      <SugBtn>Do you watch anime?</SugBtn>
+      <SugBtn>Can you help me write some code?</SugBtn>
+      <SugBtn>Do you like reading books?</SugBtn>
+      <SugBtn>What knowledge do you have?</SugBtn>
+      <SugBtn>[Add more questions here!]</SugBtn>
+    </div>
   </>);
 }
 

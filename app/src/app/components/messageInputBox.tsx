@@ -19,6 +19,7 @@ export interface R {
   setText(text: string): void;
   text: string;
   focus(): void;
+  selectSuggestion(sugg: string): void;
 }
 
 const MessageInputBox = forwardRef<R, P>(({ chat_id, suggestions, onSend, show_shadow }: P, ref) => {
@@ -90,6 +91,9 @@ const MessageInputBox = forwardRef<R, P>(({ chat_id, suggestions, onSend, show_s
     text,
     focus() {
       textareaRef.current?.focus?.();
+    },
+    selectSuggestion(sugg: string) {
+      handleSelectSuggestion(sugg);
     },
   }), [text]);
 
