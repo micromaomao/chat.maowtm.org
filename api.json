@@ -1053,7 +1053,7 @@
             "type": "string",
             "description": "What the expected reply for this dialogue is.",
             "minLength": 1,
-            "maxLength": 1000
+            "maxLength": 100000
           },
           "client_tag": {
             "$ref": "#/components/schemas/IdempotentTag"
