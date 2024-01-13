@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { Body1, Body2, BrandVariants, Image, Link, Title1, Title3 } from "@fluentui/react-components";
 import { ChatSparkleRegular, PersonCircleRegular, WarningFilled } from "@fluentui/react-icons";
 
@@ -92,16 +92,38 @@ export function HomePageFooter() {
   </>);
 }
 
+function shuffle(array: string[]) {
+  for (let i = 0; i < array.length - 1; i += 1) {
+    const j = Math.floor(Math.random() * (array.length - i)) + i;
+    const temp = array[i];
+    array[i] = array[j];
+    array[j] = temp;
+  }
+}
+
 export function ChatInitialBannerContent() {
+  const list = useMemo(() => {
+    const rawList = [
+      "What is your favourite programming language?",
+      "Who is best girl in anime?",
+      "Do you enjoy your work?",
+      "Where do you live?",
+      "Do you miss China?",
+      "Do you have any hobbies?",
+      "What are some of your best side projects?",
+      "How do I get better at coding?",
+      "Do you have any pets?",
+      "Are you looking for a new job?",
+      "Do you like functional programming?",
+      "What food do you like to eat?",
+    ];
+    shuffle(rawList);
+    return rawList.slice(0, 6);
+  }, []);
   return (<>
     <Title3 style={{ fontWeight: "normal" }}>Need ideas?</Title3>
     <div style={css.suggestionGrid}>
-      <SugBtn>What is your favourite programming language?</SugBtn>
-      <SugBtn>Do you watch anime?</SugBtn>
-      <SugBtn>Can you help me write some code?</SugBtn>
-      <SugBtn>Do you like reading books?</SugBtn>
-      <SugBtn>What knowledge do you have?</SugBtn>
-      <SugBtn>[Add more questions here!]</SugBtn>
+      {list.map((sugg) => <SugBtn key={sugg}>{sugg}</SugBtn>)}
     </div>
   </>);
 }
