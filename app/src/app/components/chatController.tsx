@@ -444,7 +444,8 @@ export class ChatController extends React.Component<P, S> {
   }
 
   shouldShowInitialBanner(): boolean {
-    return this.state.messages.every(m => m.msg_type == MessageType.BOT);
+    // return this.state.messages.every(m => m.msg_type == MessageType.BOT);
+    return true;
   }
 
   render(): React.ReactNode {

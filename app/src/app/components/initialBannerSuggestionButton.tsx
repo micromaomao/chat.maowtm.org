@@ -16,7 +16,7 @@ export default function InitialBannerSuggestionButton({ children }: P): JSX.Elem
 
   return (
     <div className={classes.container} ref={ref} onClick={handleClick}>
-      <Text size={500}>
+      <Text size={400}>
         {children}
       </Text>
     </div>
