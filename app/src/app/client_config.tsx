@@ -82,12 +82,11 @@ export function ChatInitialBannerContent() {
   return (<>
     <Title3 style={{ fontWeight: "normal" }}>Need ideas?</Title3>
     <div style={css.suggestionGrid}>
-      <SugBtn>What is your favourite programming language?</SugBtn>
-      <SugBtn>Do you watch anime?</SugBtn>
-      <SugBtn>Can you help me write some code?</SugBtn>
-      <SugBtn>Do you like reading books?</SugBtn>
+      <SugBtn>Who is best girl in Haruhi?</SugBtn>
+      <SugBtn>What book do you like reading?</SugBtn>
       <SugBtn>What knowledge do you have?</SugBtn>
-      <SugBtn>[Add more questions here!]</SugBtn>
+      <SugBtn>Can you help me write some code?</SugBtn>
+      <SugBtn>How do you feel about Kyon?</SugBtn>
     </div>
   </>);
 }
