@@ -10,6 +10,7 @@ const PROJECT_NAME = "MaoChat";
 // If you change the URL here, consider also changing the <meta rel="icon"> tag in index.html.
 import iconUrl from "../../assets/icon.png"
 import SugBtn from "./components/initialBannerSuggestionButton";
+import { useWindowSize } from "./utils/windowHooks";
 
 const css: Record<string, CSSProperties> = {
   box: {
@@ -72,7 +73,7 @@ export function HomePageFooter() {
       <Body2 style={css.text}>
         <b>Due to how LLM works, generated output <i>and</i> suggestions may not reflect reality, or may be
           complete nonsense. Please do not take anything it says seriously.</b> Any opinion expressed by this
-          AI does not constitute my actual opinion. This is just a proof of concept.
+        AI does not constitute my actual opinion. This is just a proof of concept.
       </Body2>
     </div>
     <div style={css.box}>
@@ -109,7 +110,7 @@ function takeRandom(array: string[], n: number) {
 }
 
 export function ChatInitialBannerContent() {
-  const list = useMemo(() => {
+  let list = useMemo(() => {
     const programming = [
       "What is your favourite programming language?",
       "How do I get better at coding?",
@@ -144,6 +145,10 @@ export function ChatInitialBannerContent() {
     shuffle(rawList);
     return rawList;
   }, []);
+  const { width } = useWindowSize();
+  if (width < 500) {
+    list = list.slice(0, 3);
+  }
   return (<>
     <Title3 style={{ fontWeight: "normal" }}>Need ideas?</Title3>
     <div style={css.suggestionGrid}>
