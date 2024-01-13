@@ -70,8 +70,9 @@ export function HomePageFooter() {
     <div style={css.box}>
       <WarningFilled style={css.icon} />
       <Body2 style={css.text}>
-        <b>Due to how LLM works, generated output <i>and</i> suggestions may not be true, or may be
-          complete nonsense. Please do not take anything it says seriously.</b> This is just a proof of concept.
+        <b>Due to how LLM works, generated output <i>and</i> suggestions may not reflect reality, or may be
+          complete nonsense. Please do not take anything it says seriously.</b> Any opinion expressed by this
+          AI does not constitute my actual opinion. This is just a proof of concept.
       </Body2>
     </div>
     <div style={css.box}>
@@ -148,6 +149,7 @@ export function ChatInitialBannerContent() {
     <div style={css.suggestionGrid}>
       {list.map((sugg) => <SugBtn key={sugg}>{sugg}</SugBtn>)}
     </div>
+    <Body2>Remember that AI generated output may hallucinate false statements.</Body2>
   </>);
 }
 
