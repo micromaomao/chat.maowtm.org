@@ -101,24 +101,47 @@ function shuffle(array: string[]) {
   }
 }
 
+function takeRandom(array: string[], n: number) {
+  array = array.slice();
+  shuffle(array);
+  return array.slice(0, n);
+}
+
 export function ChatInitialBannerContent() {
   const list = useMemo(() => {
-    const rawList = [
+    const programming = [
       "What is your favourite programming language?",
-      "Who is best girl in anime?",
-      "Do you enjoy your work?",
-      "Where do you live?",
-      "Do you miss China?",
-      "Do you have any hobbies?",
-      "What are some of your best side projects?",
       "How do I get better at coding?",
-      "Do you have any pets?",
-      "Are you looking for a new job?",
       "Do you like functional programming?",
+      "What are some of your best side projects?",
+      "When did you learn to code?",
+      "Do you think AI will replace programmers?",
+    ];
+    const fun = [
+      "If you can wish for anything, what would it be?",
+      "Who is best girl in anime?",
+      "Are you a funny person?",
+    ];
+    const life = [
+      "Do you have any hobbies?",
+      Math.random() < 0.5 ? "Where do you live?" : "Do you miss China?",
+      "Do you have any pets?",
       "What food do you like to eat?",
+      Math.random() < 0.5 ? "How is being trans like?" : "How is being trans like in the UK?",
+    ];
+    const work = [
+      "Do you enjoy your work?",
+      "Are you looking for a new job?",
+      "Do you feel like you have a good work-life balance?"
+    ];
+    const rawList = [
+      ...takeRandom(programming, 2),
+      ...takeRandom(fun, 2),
+      ...takeRandom(life, 2),
+      ...takeRandom(work, 1),
     ];
     shuffle(rawList);
-    return rawList.slice(0, 6);
+    return rawList;
   }, []);
   return (<>
     <Title3 style={{ fontWeight: "normal" }}>Need ideas?</Title3>
