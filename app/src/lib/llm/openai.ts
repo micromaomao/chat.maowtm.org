@@ -5,8 +5,9 @@ const API_BASE = process.env.OPENAI_API_BASE;
 const API_KEY = process.env.OPENAI_API_KEY;
 
 export const KnownEmbeddingModels = [
+  "text-embedding-3-small",
+  "text-embedding-3-large",
   "text-embedding-ada-002",
-  "text-similarity-davinci-001",
 ];
 
 export class OpenAIError extends Error {
