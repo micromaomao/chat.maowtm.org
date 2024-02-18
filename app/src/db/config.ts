@@ -52,7 +52,7 @@ export class ConfigStore {
     let conf: Config = {
       embedding_model: {
         type: "openai",
-        name: "text-embedding-ada-002",
+        name: "text-embedding-3-small",
         config: {}
       },
       generation_model: {
