@@ -18,7 +18,7 @@
     "lib": "./src/lib"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "express": "^4.21.0",
     "express-openapi-validator": "^5.0.4",
     "pg": "^8.11.1",
     "replicate": "^0.14.0",
