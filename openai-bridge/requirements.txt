@@ -3,4 +3,4 @@ starlette~=0.30
 python-dotenv~=1.0
 httpx~=0.24
 uvicorn[standard]~=0.23
-tiktoken~=0.4
+tiktoken~=0.8
