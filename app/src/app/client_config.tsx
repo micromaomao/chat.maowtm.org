@@ -134,22 +134,22 @@ export function ChatInitialBannerContent() {
 // You just need the BrandVariants bit.
 
 const maochatTheme: BrandVariants = {
-  10: "#020402",
-  20: "#101C15",
-  30: "#162E21",
-  40: "#1A3C29",
-  50: "#1D4A32",
-  60: "#1F583B",
-  70: "#226745",
-  80: "#24774E",
-  90: "#258658",
-  100: "#269662",
-  110: "#33A66E",
-  120: "#57B281",
-  130: "#75BF95",
-  140: "#90CCA8",
-  150: "#ABD8BD",
-  160: "#C6E4D1"
+  10: "#050109",
+  20: "#1E0F34",
+  30: "#33125D",
+  40: "#46127D",
+  50: "#5B0D9B",
+  60: "#7203B7",
+  70: "#8A00CD",
+  80: "#A200E1",
+  90: "#BA00F5",
+  100: "#CF21FF",
+  110: "#DE44FF",
+  120: "#EB5FFF",
+  130: "#F678FF",
+  140: "#FE90FF",
+  150: "#FFABFB",
+  160: "#FFC4F8"
 };
 
 export { API_BASE, maochatTheme, PROJECT_NAME };
