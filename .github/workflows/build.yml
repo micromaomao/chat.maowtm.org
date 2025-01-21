@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - chat.maowtm.org
+      - heatherchat
 jobs:
   docker-build-push:
     runs-on: ubuntu-latest

@@ -9,6 +9,7 @@ function Component() {
   return (
     <div className={classes.container}>
       <HomePageHeader />
+      <div style={{fontSize: "20px"}}>Ask me any questions you want!</div>
       <Suspense fallback={<SuspenseContent />}>
         <StartNewChatButton size="large" appearance="primary" />
       </Suspense>
