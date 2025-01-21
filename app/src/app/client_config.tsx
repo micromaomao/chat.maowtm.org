@@ -76,7 +76,7 @@ export function HomePageFooter() {
       </Body2>
     </div>
     <Body2 style={css.text}>
-      目前由OpenAI提供技术支持。<br />
+      目前基于OpenAI。<br />
       Currently powered by OpenAI. Source code <Link href="https://github.com/micromaomao/chat.maowtm.org" target="_blank">
         available on GitHub
       </Link>
