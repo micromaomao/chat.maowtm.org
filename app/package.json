@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "express": "^4.22.0",
-    "express-openapi-validator": "^5.0.4",
+    "express-openapi-validator": "^5.6.2",
     "pg": "^8.11.1",
     "replicate": "^0.14.0",
     "tsconfig-paths": "^4.2.0",
