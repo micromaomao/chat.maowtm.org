@@ -1,228 +1,135 @@
-import { dot, norm } from "lib/vectools";
+import { Hono } from "hono";
+import type { Env } from "../../env";
+import { dot } from "lib/vectools";
 import getConfigStore from "db/config";
-import { OpenAIEmbeddingModel } from "lib/llm/openai";
-import Router from "lib/promise_router";
+import { WorkersAIModel } from "lib/llm/workers_ai";
 import { APIError, APIValidationError } from "../basics";
-import { requireAdminAuth } from "../auth_basics";
+import { requireAdminAuth, sameOrigin } from "../auth_basics";
 import client_tags from "db/client_tag";
 import { withDBClient, Client as DBClient } from "db/index";
 import { MsgType } from "db/enums";
 import { deleteDialogueItem, editMsgAddNewChild, editMsgUpdateDialogueItem, fetchDialogueChildren, fetchDialogueItem, fetchMessageEditedDialogueItem, listAllRoot, tracePrevReplyMsgDialoguePath } from "lib/dialogue_items";
 import { DialogueItemInput, InspectLastEditResult } from "./types";
-import { ItemsMatchTree, getCachedMatcher } from "lib/match_dialogue";
 import { ItemsMatchTreeWithText, listSessions, reconstrucMessageMatchResult } from "lib/chat";
 import { fetchSuggestions } from "lib/chat_suggestions";
 import { getMetrics } from "lib/metrics";
+import { validateConfig } from "../validation";
+import { estimateTokens } from "lib/llm/models";
 
-const apiRouter = Router();
+const app = new Hono<{ Bindings: Env }>();
+app.use("*", requireAdminAuth);
 
-apiRouter.use(requireAdminAuth);
-
-apiRouter.get("/debug-embeddings", async (req, res) => {
-  const params = req.query as any;
-  const model_name = params.model;
-  let inputs = params.input;
-  if (typeof inputs === "string") {
-    inputs = [inputs];
-  }
-  let total_tokens = 0;
-  const abortController = new AbortController();
-  let model = new OpenAIEmbeddingModel(model_name);
-  try {
-    const embeddings = await Promise.all(inputs.map(async input => {
-      const res = await model.getEmbeddings(input, {}, abortController.signal);
-      total_tokens += res.total_tokens;
-      return res.embedding;
-    }));
-    const norms = embeddings.map(e => norm(e));
-    const similarities = [1];
-    for (let i = 1; i < embeddings.length; i += 1) {
-      similarities.push(dot(embeddings[0], embeddings[i]) / (norms[0] * norms[i]));
-    }
-    res.json({
-      embeddings, similarities, total_tokens,
-    });
-  } catch (e) {
-    abortController.abort();
-    throw e;
-  }
-});
-
-apiRouter.get("/global-config", async (req, res) => {
-  const config_store = await getConfigStore();
-  res.set("ETag", `"${config_store.config_id}"`);
-  res.json(config_store.config);
-});
-
-apiRouter.put("/global-config", async (req, res) => {
-  const config_store = await getConfigStore();
-  const new_config = req.body;
-  let if_match = undefined;
-  if (req.get("If-Match")) {
-    let if_match_hdr = req.get("If-Match")!;
-    if (!/^"[A-Za-z0-9]+"$/.test(if_match_hdr)) {
-      throw new APIValidationError("Invalid If-Match header");
-    }
-    if_match = if_match_hdr.slice(1, -1);
-  }
-  let update_res = await config_store.updateConfig(new_config, if_match);
-  if (update_res) {
-    res.status(204).send();
-  } else {
-    res.status(412).send();
-  }
-});
-
-export async function checkMessageValidForEdit(message_id: string, db: DBClient): Promise<void> {
-  let { rows }: { rows: any[] } = await db.query({
-    text: "select msg_type from chat_message where id = $1",
-    values: [message_id],
+app.get("/debug-embeddings", async c => {
+  const model = new WorkersAIModel(c.env.AI, c.req.query("model"));
+  if (!model.model_name.startsWith("@cf/")) throw new APIValidationError("Use a Workers AI model ID");
+  const inputs = c.req.queries("input");
+  const embeddings = await model.getEmbeddingsBatch(inputs);
+  const total_tokens = inputs.reduce((sum, input) => sum + estimateTokens(input), 0);
+  return c.json({
+    embeddings,
+    similarities: embeddings.map((vector, index) => index === 0 ? 1 : dot(embeddings[0], vector)),
+    total_tokens,
   });
-  if (rows.length == 0) {
-    throw new APIError(404, "Message not found");
+});
+
+app.post("/debug-embeddings", async c => {
+  sameOrigin(c);
+  const body = await c.req.json<{ model: string; input: string[] }>();
+  if (body.input.some(text => estimateTokens(text) > 7900)) {
+    throw new APIValidationError("Embedding input exceeds the safe 8k context budget");
   }
-  if (rows[0].msg_type != MsgType.Bot) {
-    throw new APIError(400, "Message is not a bot message");
-  }
+  const model = new WorkersAIModel(c.env.AI, body.model);
+  return c.json({ data: await model.getEmbeddingsBatch(body.input) });
+});
+
+app.get("/global-config", async c => {
+  const store = await getConfigStore();
+  c.header("ETag", `"${store.config_id}"`);
+  return c.json(store.config);
+});
+
+app.put("/global-config", async c => {
+  sameOrigin(c);
+  const config: unknown = await c.req.json();
+  validateConfig(config);
+  const header = c.req.header("If-Match");
+  if (header && !/^"[A-Za-z0-9]+"$/.test(header)) throw new APIValidationError("Invalid If-Match header");
+  const updated = await (await getConfigStore()).updateConfig(config, header?.slice(1, -1));
+  return c.body(null, updated ? 204 : 412);
+});
+
+export async function checkMessageValidForEdit(message: string, db: DBClient): Promise<void> {
+  const { rows } = await db.query("select msg_type from chat_message where id = $1", [message]);
+  if (!rows.length) throw new APIError(404, "Message not found");
+  if (rows[0].msg_type !== MsgType.Bot) throw new APIValidationError("Message is not a bot message");
 }
 
-apiRouter.get("/messages/:msg_id/inspect-last-edit", async (req, res) => {
-  const message_id = req.params.msg_id;
-  let ret = await withDBClient<InspectLastEditResult>(async db => {
-    await checkMessageValidForEdit(message_id, db);
-    let maybe_dialogue_item = await fetchMessageEditedDialogueItem(message_id, db);
-    if (maybe_dialogue_item) {
+app.get("/messages/:msg_id/inspect-last-edit", async c => {
+  const message = c.req.param("msg_id");
+  const result = await withDBClient<InspectLastEditResult>(async db => {
+    await checkMessageValidForEdit(message, db);
+    const edited = await fetchMessageEditedDialogueItem(message, db);
+    return edited ? { edited: true, updated_dialogue_item: edited } :
+      { edited: false, prev_reply_path: await tracePrevReplyMsgDialoguePath(message, db) };
+  });
+  return c.json(result);
+});
+
+app.get("/messages/:msg_id/reply-analysis", async c => {
+  const message = c.req.param("msg_id");
+  return c.json(await withDBClient(async db => {
+    const result = await reconstrucMessageMatchResult(message, db);
+    function map(node: ItemsMatchTreeWithText): object {
       return {
-        edited: true,
-        updated_dialogue_item: maybe_dialogue_item
-      }
-    } else {
-      return {
-        edited: false,
-        prev_reply_path: await tracePrevReplyMsgDialoguePath(message_id, db)
-      }
+        this_item: node.this_item.dialogue_item_id, selected_phrasing: node.q_text,
+        response: node.response, max_score: node.max_score, children: node.children.map(map),
+      };
     }
-  });
-  res.json(ret);
-});
-
-apiRouter.get("/messages/:msg_id/reply-analysis", async (req, res) => {
-  const message_id = req.params.msg_id;
-  let match_result: any = {
-    available: false
-  };
-  let suggestions = [];
-  await withDBClient(async db => {
-    let reconst_match_res = await reconstrucMessageMatchResult(message_id, db);
-    if (reconst_match_res) {
-      match_result.available = true;
-      match_result.has_missing_items = reconst_match_res.has_missing_items;
-      match_result.has_missing_phrasings = reconst_match_res.has_missing_phrasings;
-      function dfsMapNode(node: ItemsMatchTreeWithText): any {
-        return {
-          this_item: node.this_item.dialogue_item_id,
-          selected_phrasing: node.q_text,
-          response: node.response,
-          max_score: node.max_score,
-          children: node.children.map(dfsMapNode),
-        };
-      }
-      match_result.match_trees = reconst_match_res.match_trees.map(dfsMapNode);
-    }
-
-    suggestions = await fetchSuggestions(message_id, db);
-  });
-  return res.json({
-    match_result,
-    suggestions,
-  });
-});
-
-apiRouter.put("/messages/:msg_id/edit-bot", async (req, res) => {
-  const client_tag = req.body.client_tag;
-  const tag_entry = await client_tags.checkTag(client_tag);
-  if (tag_entry) {
-    res.status(204).send();
-  }
-  const message_id = req.params.msg_id;
-  const update_item_id = req.body.item_id;
-  const insert_parent_id = req.body.parent_id;
-  const has_insert = insert_parent_id !== undefined;
-  if (update_item_id && has_insert) {
-    throw new APIValidationError("Only one of item_id and parent_id can be specified");
-  }
-  if (!update_item_id && !has_insert) {
-    throw new APIValidationError("Either item_id or parent_id (can be null) must be specified");
-  }
-  const item_data: DialogueItemInput = {
-    phrasings: req.body.phrasings,
-    reply: req.body.reply,
-  };
-  await withDBClient(async db => {
-    await db.query("begin transaction isolation level serializable");
-    try {
-      await checkMessageValidForEdit(message_id, db);
-      if (has_insert) {
-        await editMsgAddNewChild(message_id, insert_parent_id, item_data, db);
-      } else {
-        await editMsgUpdateDialogueItem(message_id, update_item_id, item_data, db);
-      }
-      await db.query("commit");
-      await client_tags.setTag(client_tag, null, null);
-    } finally {
-      await db.query("rollback");
-    }
-  });
-  res.status(204).send();
-});
-
-apiRouter.get("/dialogue-item/:item_id", async (req, res) => {
-  const item_id = req.params.item_id;
-  let ret = await withDBClient(async db => {
-    let item_data = await fetchDialogueItem(item_id, db);
-    let children = await fetchDialogueChildren(item_id, db);
     return {
-      id: item_id,
-      item_data,
-      children
+      match_result: result ? {
+        available: true, has_missing_items: result.has_missing_items,
+        has_missing_phrasings: result.has_missing_phrasings, match_trees: result.match_trees.map(map),
+      } : { available: false },
+      suggestions: await fetchSuggestions(message, db),
     };
-  });
-  res.json(ret);
+  }));
 });
 
-apiRouter.get("/list-dialogue-items", async (req, res) => {
-  const result = await listAllRoot();
-  res.json(result);
+export async function editBotMessage(request: Request, message: string, db: DBClient): Promise<void> {
+  const body: { client_tag?: string; item_id?: string; parent_id?: string; phrasings: string[]; reply: string } = await request.json();
+  const scope = `edit:${message}`;
+  if (await client_tags.checkTag(body.client_tag, scope)) return;
+  const hasInsert = body.parent_id !== undefined;
+  if (!!body.item_id === hasInsert) throw new APIValidationError("Specify exactly one of item_id and parent_id (which can be null)");
+  const data: DialogueItemInput = { phrasings: body.phrasings, reply: body.reply };
+  await checkMessageValidForEdit(message, db);
+  if (hasInsert) await editMsgAddNewChild(message, body.parent_id, data, db);
+  else await editMsgUpdateDialogueItem(message, body.item_id, data, db);
+  await client_tags.setTag(body.client_tag, null, scope);
+}
+
+app.get("/dialogue-item/:item_id", async c => {
+  const id = c.req.param("item_id");
+  return c.json(await withDBClient(async db => ({
+    id, item_data: await fetchDialogueItem(id, db), children: await fetchDialogueChildren(id, db),
+  })));
 });
 
-apiRouter.delete("/dialogue-item/:item_id", async (req, res) => {
-  const item_id = req.params.item_id;
-  let recursive = false;
-  if (req.query.recursive) {
-    recursive = true;
-  }
+app.get("/list-dialogue-items", async c => c.json(await listAllRoot()));
+app.delete("/dialogue-item/:item_id", async c => {
+  sameOrigin(c);
   await withDBClient(async db => {
-    await db.query("begin transaction isolation level serializable");
+    await db.query("begin");
     try {
-      await deleteDialogueItem(item_id, recursive, db);
+      await deleteDialogueItem(c.req.param("item_id"), c.req.query("recursive") === "true", db);
       await db.query("commit");
     } finally {
       await db.query("rollback");
     }
   });
-  res.status(204).send();
+  return c.body(null, 204);
 });
+app.get("/list-chat-sessions", async c => c.json(await listSessions(Number(c.req.query("limit") || 1000), c.req.query("until"), 6)));
+app.get("/metrics", async c => c.json(await getMetrics()));
 
-apiRouter.get("/list-chat-sessions", async (req, res) => {
-  const limit = (req.query.limit === undefined) ? 1000 : parseInt(req.query.limit as string);
-  const until = req.query.until as string | undefined;
-  let ret = await listSessions(limit, until, 6);
-  res.json(ret);
-});
-
-apiRouter.get("/metrics", async (req, res) => {
-  let ret = await getMetrics();
-  res.json(ret);
-});
-
-export default apiRouter;
+export default app;

@@ -237,7 +237,7 @@ function PromptSettingTab() {
     });
   }
 
-  const firstMessageInputRef = useRef<HTMLInputElement>();
+  const firstMessageInputRef = useRef<HTMLTextAreaElement>();
 
   return (
     <div>

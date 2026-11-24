@@ -104,6 +104,9 @@ export class DialogueMatcher {
   }
 
   batchSimilarity(embedding: number[] | Float32Array): BatchSimilarityResult {
+    if (this.nb_phrasings > 0 && embedding.length !== this.embedding_dim) {
+      throw new Error(`Embedding dimension mismatch: expected ${this.embedding_dim}, got ${embedding.length}`);
+    }
     let scores = new Float32Array(this.nb_phrasings);
     for (let i = 0; i < this.nb_phrasings; i += 1) {
       scores[i] = 0;
@@ -508,7 +511,7 @@ export class DialogueMatcher {
           inner join dialogue_phrasing p on (p.id = emb.phrasing)
           inner join dialogue_item it on (p.dialogue_item = it.item_id)
         where
-          emb.model = $1`,
+          emb.model = $1 and emb.source_text = p.q_text`,
       values: [embedding_model_name]
     });
     let embedding_dim = 0;
@@ -584,13 +587,27 @@ export class DialogueMatcher {
   }
 }
 
-let cached_matcher: DialogueMatcher | null = null;
+let cached_matcher: { key: string; matcher: DialogueMatcher } | null = null;
 
 export async function getCachedMatcher(): Promise<DialogueMatcher> {
-  if (cached_matcher === null) {
-    cached_matcher = await withDBClient(db => DialogueMatcher.fromDatabase(db));
-  }
-  return cached_matcher;
+  return withDBClient(async db => {
+    const store = await getConfigStore();
+    const { rows } = await db.query("select revision::text from dialogue_revision");
+    const key = `${store.config_id}:${rows[0].revision}`;
+    if (cached_matcher?.key === key) return cached_matcher.matcher;
+    const missing = await db.query(
+      `select count(*)::int as count from dialogue_phrasing p
+       left join dialogue_phrasing_embedding e on e.phrasing = p.id and e.model = $1
+       where e.phrasing is null or e.source_text is distinct from p.q_text`,
+      [store.config.embedding_model.name]
+    );
+    if (missing.rows[0].count > 0) {
+      throw new Error("Dialogue embeddings are missing or out of date. Run npm run reembed.");
+    }
+    const matcher = await DialogueMatcher.fromDatabase(db);
+    cached_matcher = { key, matcher };
+    return matcher;
+  });
 }
 
 export function deleteCachedMatcher() {

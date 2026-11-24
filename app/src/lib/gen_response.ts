@@ -1,543 +1,115 @@
 import { MsgType } from "db/enums";
-import { NewChatMessageEvent, addChatMessage, excludeSingleMessage } from "./chat"
 import { Client as DBClient, withDBClient } from "db/index";
-import { asyncSleep, input2log } from "./utils";
 import getConfigStore from "db/config";
-import { ChatHistoryInputLine, CheckModerationResult, LLMBase, LLMChatCompletionInput } from "./llm/base";
-import { MatchDialogueResult, DialogueMatcher, getCachedMatcher } from "./match_dialogue";
-import { NewChatSuggestionEvent, extractSuggestions, fetchSuggestions, setMessageSuggestions } from "./chat_suggestions";
+import { LLMBase } from "./llm/base";
+import { getCachedMatcher } from "./match_dialogue";
+import { extractSuggestions, fetchSuggestions } from "./chat_suggestions";
+import type { NewChatMessage } from "./chat";
+import { estimateTokens } from "./llm/models";
+import { budgetHistory, promptBudget } from "./prompt_budget";
 
-let session_id_to_generation_tasks: Map<string, GenerationTask> = new Map();
-
-const PROMPT_SAMPLE_REPLACEMENT_TEXT = "<|DIALOGUE_ITEMS|>";
-const PROMPT_SAMPLE_USER_PREFIX = "User: ";
-const PROMPT_SAMPLE_BOT_PREFIX = "You: ";
-const PROMPT_SAMPLE_NO_CONTENT = "(no relevant content found)";
-
-const MODEL_PER_MESSAGE_TOKEN_OVERHEAD = 3;
-
-/**
- * The delay before starting the generation task.
- *
- * This delay exists for 2 reason - to give an illusion of "thinking", and also
- * to ensure that whatever new database client we get later will have seen the
- * updated message.
- */
-const GENERATION_START_DELAY = 500;
-
-const GENERATION_RETRY_INITIAL_DELAY = 1000;
-const GENERATION_MAX_RETRY_COUNT = 2;
-
-const EXTRA_SUGGESTIONS_DELAY = 5000;
-
-class UnrecoverableGenerationError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
+export interface GeneratedReply {
+  message: NewChatMessage;
+  suggestions: string[];
 }
 
-class ModerationFlaggedError extends UnrecoverableGenerationError {
-  constructor(public readonly mod_res: CheckModerationResult) {
-    if (!mod_res.flagged) {
-      throw new Error("Assertion failed: mod_res.flagged is false");
-    }
-    super(`moderation flagged: ${mod_res.flagged_categories.join(",")}`)
-  }
-}
-
-export class GenerationTask {
-  private abort_controller: AbortController;
-  private retry_count: number = 0;
-  private next_retry_delay: number = GENERATION_RETRY_INITIAL_DELAY;
-
-  private generated_message_evt: NewChatMessageEvent | null = null;
-  private continue_completion_input: LLMChatCompletionInput | null = null;
-  private generated_suggestion_evt: NewChatSuggestionEvent | null = null;
-
-  last_message_id: string;
-  src_message_evt: NewChatMessageEvent;
-  session_id: string;
-  dialogue_matcher: DialogueMatcher;
-
-  constructor(msg_evt: NewChatMessageEvent, dialogue_matcher: DialogueMatcher) {
-    this.last_message_id = msg_evt.id;
-    this.src_message_evt = msg_evt;
-    this.session_id = msg_evt.session_id;
-    this.dialogue_matcher = dialogue_matcher;
-
-    this.abort_controller = new AbortController();
-    if (session_id_to_generation_tasks.has(this.session_id)) {
-      throw new Error("Generation task already exists for this session.");
-    }
-    session_id_to_generation_tasks.set(this.session_id, this);
-
-    setTimeout(() => {
-      this.run();
-    }, GENERATION_START_DELAY);
+export async function generateReply(session: string, source: string, signal: AbortSignal): Promise<GeneratedReply> {
+  const store = await getConfigStore();
+  const config = store.config;
+  const model = store.generation_model;
+  const embeddingModel = store.embedding_model;
+  const budget = promptBudget(config.generation_model);
+  const placeholder = "<|DIALOGUE_ITEMS|>";
+  if (!config.prompt_template.includes(placeholder)) {
+    throw new Error("Prompt template must contain <|DIALOGUE_ITEMS|>");
   }
 
-  cancel() {
-    this.abort_controller.abort();
-    this.removeSelfFromMap();
-  }
-
-  get cancelled(): boolean {
-    return this.abort_controller.signal.aborted;
-  }
-
-  private removeSelfFromMap() {
-    let stored = session_id_to_generation_tasks.get(this.session_id);
-    if (stored === this) {
-      session_id_to_generation_tasks.delete(this.session_id);
-    }
-  }
-
-  private async run() {
-    if (this.cancelled) {
-      return;
-    }
-
-    try {
-      await this.attemptReplyGeneration();
-      if (this.cancelled) {
-        return;
-      }
-      if (!this.generated_suggestion_evt) {
-        if (this.retry_count == 0) {
-          await asyncSleep(EXTRA_SUGGESTIONS_DELAY);
-          if (this.cancelled) {
-            return;
-          }
-        }
-        await this.attemptSuggestionGeneration();
-        if (this.cancelled) {
-          return;
-        }
-      }
-      await this.done(null);
-    } catch (e) {
-      if (this.cancelled) {
-        return;
-      }
-      console.error(`(Attempt ${this.retry_count + 1} / ${GENERATION_MAX_RETRY_COUNT + 1}) \
-Error generating reply for ${this.last_message_id} (${input2log(this.src_message_evt?.content)}) \
-in ${this.session_id}:`, e);
-      if (e instanceof UnrecoverableGenerationError) {
-        console.error("Above error is unrecoverable, not retrying.");
-      }
-      if (e instanceof UnrecoverableGenerationError || this.retry_count >= GENERATION_MAX_RETRY_COUNT) {
-        await this.done(e);
-      } else {
-        this.retry_count += 1;
-        setTimeout(() => {
-          this.run();
-        }, this.next_retry_delay);
-        this.next_retry_delay *= 2;
-      }
-    }
-  }
-
-  private async attemptReplyGeneration(): Promise<void> {
-    if (this.generated_message_evt || this.cancelled) {
-      return;
-    }
-
-    const conf_store = await getConfigStore();
-    let config = conf_store.config;
-    let generation_model = conf_store.generation_model;
-    let embedding_model = conf_store.embedding_model;
-    const cancelledError = new Error("Cancelled");
-
-    let curr_total_tokens = await generation_model.countTokens(
-      config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, ""),
-      {},
-      this.abort_controller.signal
+  const prepared = await withDBClient(async db => {
+    const { rows } = await db.query(
+      `select msg.id, msg.session as session_id, msg.msg_type, msg.content,
+        emb.embedding, mtd.matched_dialogue_items::text[] as matched_dialogue_items,
+        mtd.matched_item_scores, mtd.best_phrasing::text[] as best_phrasing
+       from chat_message msg
+       left join chat_message_embedding emb on emb.msg = msg.id and emb.model = $1
+       left join chat_reply_metadata mtd on mtd.reply_msg = msg.id
+       where msg.session = $2 and not msg.exclude_from_generation and msg.msg_type in (0, 1)
+       order by msg.id desc limit $3`,
+      [embeddingModel.model_name, session, config.generation_model.history_limit]
     );
-    let max_prompt_tokens = config.generation_model.total_token_limit - config.generation_model.reserve_token_count;
-    let match_res: MatchDialogueResult;
-    let sample_texts: string[];
-    let msg_hist_full: any[];
-
-    await withDBClient(async db => {
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-      msg_hist_full = (await db.query({
-        name: "gen_responses.ts#GenerationTask#attempt#fetch_last_messages",
-        text: `
-          select
-            msg.id as id,
-            session as session_id,
-            msg.msg_type as msg_type,
-            msg.content as content,
-            msg.generation_model as generation_model,
-            msg.nb_tokens as nb_tokens,
-            emb.embedding as embedding,
-            mtd.matched_dialogue_items::text[] as matched_dialogue_items,
-            mtd.matched_item_scores as matched_item_scores,
-            mtd.best_phrasing::text[] as best_phrasing
-          from chat_message msg
-          left outer join chat_message_embedding emb
-            on msg.id = emb.msg and emb.model = $1
-          left outer join chat_reply_metadata mtd
-            on (msg.msg_type = ${MsgType.Bot} and msg.id = mtd.reply_msg)
-          where
-            msg.session = $2 and
-            msg.exclude_from_generation = false and
-            (msg.msg_type = ${MsgType.User} or msg.msg_type = ${MsgType.Bot})
-          order by id desc
-          limit $3;`,
-        values: [embedding_model.model_name, this.session_id, config.generation_model.history_limit],
-      })).rows;
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-      if (msg_hist_full.length == 0 || msg_hist_full[0].id > this.last_message_id) {
-        this.cancel();
-        throw cancelledError;
-      }
-      if (msg_hist_full[0].id < this.last_message_id) {
-        // Will trigger a retry
-        throw new Error("Unable to fetch latest message.");
-      }
-
-      for (let row of msg_hist_full) {
-        if (this.cancelled) {
-          throw cancelledError;
-        }
-        await ensureMsgRowHasTokenCount(row, generation_model, db, this.abort_controller.signal);
-        if (this.cancelled) {
-          throw cancelledError;
-        }
-        await ensureMsgRowHasEmbedding(row, embedding_model, db, this.abort_controller.signal);
-      }
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-
-      match_res = await this.dialogue_matcher.matchDialogue(
-        msg_hist_full,
-        config.generation_model.max_sample_tokens,
-        this.abort_controller.signal,
-        db
-      );
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-
-      sample_texts = match_res.model_sample_input.map(x => {
-        if (typeof x == "string") {
-          return x;
-        } else {
-          return generation_model.dialogueToPrompt(x);
-        }
-      });
-
-      if (match_res.direct_result) {
-        throw new UnrecoverableGenerationError("Unimplemented");
-      } else {
-        if (sample_texts.length == 0) {
-          sample_texts.push(PROMPT_SAMPLE_NO_CONTENT);
-        }
-      }
-    });
-
-    if (this.cancelled) {
-      throw cancelledError;
+    signal.throwIfAborted();
+    if (!rows.length || rows[0].id !== source) {
+      throw new Error("Generation source is no longer the latest eligible message");
     }
-
-    if (match_res.direct_result) {
-      throw new UnrecoverableGenerationError("Unimplemented");
-    } else {
-      if (!config.prompt_template.includes(PROMPT_SAMPLE_REPLACEMENT_TEXT)) {
-        throw new UnrecoverableGenerationError("Prompt template does not contain replacement text");
-      }
-      let sample_text_str = sample_texts.join("\n");
-      let prompt = config.prompt_template.replace(PROMPT_SAMPLE_REPLACEMENT_TEXT, sample_text_str);
-      curr_total_tokens += await generation_model.countTokens(sample_text_str, {}, this.abort_controller.signal);
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-
-      type InputLine = {
-        msg_id: string;
-        role: "user" | "bot",
-        text: string,
-        text_without_suggestions: string,
-      };
-      let chat_input_lines: InputLine[] = [];
-
-      let attempted_include_suggestions = false;
-      for (let row of msg_hist_full) {
-        let input_line: InputLine = {
-          msg_id: row.id,
-          role: row.msg_type == MsgType.User ? "user" : "bot",
-          text: row.content,
-          text_without_suggestions: row.content,
-        };
-        chat_input_lines.push(input_line);
-        let new_total_tokens = curr_total_tokens + row.nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD; // Some overhead for message separators
-        if (new_total_tokens > max_prompt_tokens && chat_input_lines.length > 1) {
-          break;
-        }
-        curr_total_tokens = new_total_tokens;
-
-        if (!attempted_include_suggestions && row.msg_type == MsgType.Bot) {
-          attempted_include_suggestions = true;
-          let suggestions = await fetchSuggestions(row.id);
-          if (this.cancelled) {
-            throw cancelledError;
-          }
-          if (suggestions.length > 0) {
-            let additional_text = "\n" + suggestions.map((x, i) => `Suggestion ${i + 1}: ${x}`).join("\n");
-            input_line.text += additional_text;
-            curr_total_tokens += await generation_model.countTokens(additional_text, { session_id: row.session_id }, this.abort_controller.signal);
-          }
-        }
-      }
-
-      // If earliest message is bot, remove it as there is no need to include it
-      // if we aren't including the corresponding user message.
-      if (chat_input_lines[chat_input_lines.length - 1].role == "bot" && chat_input_lines.length >= 2) {
-        curr_total_tokens -= msg_hist_full[chat_input_lines.length - 1].nb_tokens + MODEL_PER_MESSAGE_TOKEN_OVERHEAD;;
-        chat_input_lines.pop();
-      }
-
-      chat_input_lines.reverse();
-
-      if (generation_model.shouldUseModeration) {
-        let mod_res = await generation_model.checkModeration(
-          chat_input_lines.filter(x => x.role == "user").map(x => x.text_without_suggestions).join("\n"),
-          { session_id: this.session_id },
-          this.abort_controller.signal
-        );
-        if (this.cancelled) {
-          throw cancelledError;
-        }
-        if (mod_res.flagged) {
-          throw new ModerationFlaggedError(mod_res);
-        }
-      }
-
-      let input: LLMChatCompletionInput = {
-        chat_history: chat_input_lines,
-        instruction_prompt: prompt,
-      };
-
-      let completion_res = await generation_model.chatCompletion(input, { session_id: this.session_id }, this.abort_controller.signal);
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-
-      let suggestion_extraction_res = extractSuggestions(completion_res.text);
-
-      await withDBClient(async db => {
-        if (this.cancelled) {
-          throw cancelledError;
-        }
-
-        this.generated_message_evt = await addChatMessage({
-          session_id: this.session_id,
-          msg_type: MsgType.Bot,
-          content: suggestion_extraction_res.message_without_suggestions,
-          generation_model: generation_model.model_name,
-          nb_tokens: completion_res.completion_tokens,
-          supress_generation: true,
-          reply_metadata: {
-            ...match_res,
-            model_chat_inputs: chat_input_lines.map(x => x.msg_id),
-          }
-        }, db);
-
-        if (this.cancelled) {
-          throw cancelledError;
-        }
-
-        this.storeSuggestions(suggestion_extraction_res.suggestions, db);
-      });
-
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-
-      if (suggestion_extraction_res.suggestions.length == 0) {
-        this.continue_completion_input = input;
-        input.chat_history.push({
-          role: "bot",
-          text: completion_res.text,
-        });
-        let curr_total_tokens = completion_res.total_tokens;
-        while (input.chat_history.length > 1 && curr_total_tokens > max_prompt_tokens) {
-          let first_msg = input.chat_history.shift();
-          curr_total_tokens -= await generation_model.countTokens(first_msg.text, { session_id: this.session_id }, this.abort_controller.signal);
-          if (this.cancelled) {
-            throw cancelledError;
-          }
-        }
+    await ensureMsgRowHasEmbedding(rows[0], embeddingModel, db, signal);
+    const baseTokens = estimateTokens(config.prompt_template.replace(placeholder, "")) + 12;
+    const available = budget - baseTokens - estimateTokens(rows[0].content) - 12;
+    if (available < 0) throw new Error("Latest message and system prompt exceed the safe context budget");
+    const matcher = await getCachedMatcher();
+    const match = await matcher.matchDialogue(rows, Math.min(config.generation_model.max_sample_tokens, available), signal, db);
+    const samples = match.model_sample_input.map(line => typeof line === "string" ? line : model.dialogueToPrompt(line));
+    const prompt = config.prompt_template.replace(placeholder, samples.join("\n") || "(no relevant content found)");
+    const latestBot = rows.find(row => row.msg_type === MsgType.Bot);
+    if (latestBot) {
+      const suggestions = await fetchSuggestions(latestBot.id, db);
+      const extra = suggestions.map((text, index) => `Suggestion ${index + 1}: ${text}`).join("\n");
+      if (extra && estimateTokens(prompt + rows[0].content + latestBot.content + extra) + 36 <= budget) {
+        latestBot.content += "\n" + extra;
       }
     }
-  }
-
-  private async storeSuggestions(generated_suggestions: string[], db?: DBClient): Promise<void> {
-    if (generated_suggestions.length > 3) {
-      generated_suggestions = generated_suggestions.slice(0, 3);
-    }
-    if (generated_suggestions.length == 0) {
-      return;
-    }
-    this.generated_suggestion_evt = await setMessageSuggestions(this.generated_message_evt.id, generated_suggestions, db);
-  }
-
-  private async attemptSuggestionGeneration(): Promise<void> {
-    if (this.generated_suggestion_evt || this.cancelled) {
-      return;
-    }
-    if (!this.generated_message_evt) {
-      throw new Error("Cannot generate suggestions without a generated message");
-    }
-    const cancelledError = new Error("Cancelled");
-
-    const conf_store = await getConfigStore();
-
-    if (this.continue_completion_input) {
-      let completion_res = await conf_store.generation_model.chatCompletion(
-        this.continue_completion_input,
-        { session_id: this.session_id },
-        this.abort_controller.signal
-      );
-      if (this.cancelled) {
-        throw cancelledError;
-      }
-
-      let suggestion_extraction_res = extractSuggestions(completion_res.text);
-
-      await withDBClient(async db => {
-        if (this.cancelled) {
-          throw cancelledError;
-        }
-        this.storeSuggestions(suggestion_extraction_res.suggestions, db);
-      });
-    }
-  }
-
-  private async done(error: Error | null) {
-    this.removeSelfFromMap();
-    if (this.cancelled) {
-      return;
-    }
-    let new_msg = this.generated_message_evt;
-    if (!error) {
-      console.log(`Generated reply for ${this.last_message_id} in ${this.session_id}:\n\
-> ${input2log(this.src_message_evt?.content)}\n\
-< ${input2log(new_msg?.content)}`);
-    } else if (!new_msg) {
-      try {
-        await withDBClient(async db => {
-          if (error instanceof ModerationFlaggedError) {
-            let content = "Your message cannot be processed because it has been flagged by the OpenAI moderation model as " +
-              "against their usage policy, in the following ";
-            if (error.mod_res.flagged_categories.length == 1) {
-              content += "category: ";
-            } else {
-              content += "categories: ";
-            }
-            content += error.mod_res.flagged_categories.join(", ") +
-              ".\n" +
-              "Unfortunately, because this application currently relies on OpenAI's language model for message generation," +
-              " we are unable to further process this chat session unless you revert one or more of your messages," +
-              " by clicking the \"rollback\" icon on the first offending message you sent.\n" +
-              "You can also start a new chat session by clicking the \"Start new chat\" button.";
-            await addChatMessage({
-              msg_type: MsgType.Error,
-              session_id: this.session_id,
-              content
-            });
-          } else {
-            await addChatMessage({
-              msg_type: MsgType.Error,
-              session_id: this.session_id,
-              content: `Failed to generate reply for the previous message. Please try again later.\n${error}`,
-            }, db);
-            await excludeSingleMessage(this.last_message_id, db);
-          }
-        });
-      } catch (e) {
-        console.error(`Failed to send error message back to user on chat session ${this.session_id}`, e)
-      }
-    }
-  }
+    return { match, prompt, lines: budgetHistory(prompt, rows, budget) };
+  });
+  signal.throwIfAborted();
+  const completion = await model.chatCompletion({
+    instruction_prompt: prepared.prompt,
+    chat_history: prepared.lines.map(line => ({ role: line.role, text: line.text })),
+  }, { session_id: session }, signal);
+  const result = extractSuggestions(completion.text);
+  if (!result.message_without_suggestions) throw new Error("Workers AI returned suggestions without a reply");
+  return {
+    message: {
+      session_id: session,
+      msg_type: MsgType.Bot,
+      content: result.message_without_suggestions,
+      generation_model: model.model_name,
+      nb_tokens: estimateTokens(result.message_without_suggestions),
+      supress_generation: true,
+      reply_metadata: {
+        ...prepared.match,
+        model_chat_inputs: prepared.lines.map(line => line.msg_id),
+      },
+    },
+    suggestions: result.suggestions.slice(0, 3),
+  };
 }
 
-export async function ensureMsgRowHasTokenCount(msg_row: any, generation_model: LLMBase, db: DBClient, abort: AbortSignal) {
-  if (msg_row.generation_model == generation_model.model_name && msg_row.nb_tokens !== null) {
-    return;
-  }
-  let tokens = await generation_model.countTokens(msg_row.content, { session_id: msg_row.session_id }, abort);
-  msg_row.generation_model = generation_model.model_name;
-  msg_row.nb_tokens = tokens;
-  if (abort.aborted) {
-    return;
-  }
-  try {
-    await db.query({
-      text: "update chat_message set generation_model = $1, nb_tokens = $2 where id = $3",
-      values: [generation_model.model_name, tokens, msg_row.id]
-    });
-  } catch (e) {
-    console.warn(`Failed to update token count for message ${msg_row.id}`, e);
-    // Do nothing
-  }
+export async function ensureMsgRowHasEmbedding(row: any, model: LLMBase, db: DBClient, signal: AbortSignal): Promise<void> {
+  if (row.embedding != null) return;
+  const result = await model.getEmbeddings(row.content, { session_id: row.session_id }, signal);
+  signal.throwIfAborted();
+  await db.query(
+    `insert into chat_message_embedding (msg, model, embedding, nb_tokens)
+     values ($1, $2, $3::jsonb, $4) on conflict (msg, model) do nothing`,
+    [row.id, model.model_name, JSON.stringify(result.embedding), result.total_tokens]
+  );
+  row.embedding = result.embedding;
 }
 
-export async function ensureMsgRowHasEmbedding(msg_row: any, embedding_model: LLMBase, db: DBClient, abort: AbortSignal) {
-  if (msg_row.embedding !== null) {
-    return;
-  }
-  let emb_res = await embedding_model.getEmbeddings(msg_row.content, { session_id: msg_row.session_id }, abort);
-  msg_row.embedding = emb_res.embedding;
-  if (abort.aborted) {
-    return;
-  }
-  try {
-    // We stringify emb_res.result because is an array, and node-postgres
-    // translates it into a postgres array string which results in invalid
-    // syntax.
-    await db.query({
-      text: "insert into chat_message_embedding (msg, model, embedding, nb_tokens) values ($1, $2, $3::jsonb, $4)",
-      values: [msg_row.id, embedding_model.model_name, JSON.stringify(emb_res.embedding), emb_res.total_tokens]
-    });
-  } catch (e) {
-    console.warn("Failed to insert embedding:", e);
-    // Do nothing
-  }
-}
-
-export async function startBackgroundGenerateResponseTask(message: NewChatMessageEvent): Promise<void> {
-  if (message.msg_type != MsgType.User || message.reply_metadata || message.supress_generation) {
-    throw new Error("Invalid message generation request");
-  }
-  let existing_gen_task = session_id_to_generation_tasks.get(message.session_id);
-  let should_start = false;
-  if (!existing_gen_task) {
-    should_start = true;
-  } else {
-    if (existing_gen_task.last_message_id < message.id) {
-      console.log(`Cancelling existing generation task for ${message.session_id}`);
-      existing_gen_task.cancel();
-      should_start = true;
-    }
-  }
-
-  if (should_start) {
-    let matcher = await getCachedMatcher();
-    new GenerationTask(message, matcher);
-  }
-}
-
-export function cancelGenerationTask(session_id: string) {
-  let existing_gen_task = session_id_to_generation_tasks.get(session_id);
-  if (existing_gen_task) {
-    console.log(`Cancelling existing generation task for ${session_id}`);
-    existing_gen_task.cancel();
-  }
+export async function generateSuggestions(session: string, source: string, reply: string, signal: AbortSignal): Promise<string[]> {
+  const store = await getConfigStore();
+  const rows = await withDBClient(async db => (await db.query(
+    "select id, msg_type, content from chat_message where id = any($1) order by id desc",
+    [[source, reply]]
+  )).rows);
+  const prompt = "Write up to three short follow-up messages that the user could send next. Output only one per line, formatted as Suggestion 1: ..., Suggestion 2: ..., Suggestion 3: ...";
+  const lines = budgetHistory(prompt, rows, promptBudget(store.config.generation_model));
+  const completion = await store.generation_model.chatCompletion({
+    instruction_prompt: prompt,
+    chat_history: [
+      ...lines.map(line => ({ role: line.role, text: line.text })),
+      { role: "user", text: "Suggest follow-up messages now." },
+    ],
+  }, { session_id: session }, signal);
+  const suggestions = extractSuggestions(completion.text).suggestions.slice(0, 3);
+  if (!suggestions.length) throw new Error("Workers AI returned no follow-up suggestions");
+  return suggestions;
 }

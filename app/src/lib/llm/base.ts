@@ -23,16 +23,6 @@ export interface LLMEmbeddingOutput {
   total_tokens: number;
 }
 
-export enum ModerationProvider {
-  OpenAI = "OpenAI"
-}
-
-export interface CheckModerationResult {
-  flagged: boolean;
-  flagged_categories?: string[];
-  moderation_provider?: ModerationProvider;
-}
-
 export abstract class LLMBase {
   static readonly supportsChatCompletion: boolean;
   static readonly supportsEmbedding: boolean;
@@ -41,10 +31,6 @@ export abstract class LLMBase {
     public readonly model_name: string,
     public readonly config: object,
   ) { }
-
-  get shouldUseModeration(): boolean {
-    return false;
-  }
 
   abstract countTokens(text: string, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<number>;
   chatCompletion(input: LLMChatCompletionInput, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<LLMCOmpletionOutput> {
@@ -55,8 +41,5 @@ export abstract class LLMBase {
   }
   dialogueToPrompt({ role, text }: ChatHistoryInputLine): string {
     return `${role == "user" ? "User" : "You"}: ${text}`;
-  }
-  checkModeration(text: string, telemetry: TelemetryInfo, abortSignal?: AbortSignal): Promise<CheckModerationResult> {
-    throw new Error("checkModeration not implemented");
   }
 }

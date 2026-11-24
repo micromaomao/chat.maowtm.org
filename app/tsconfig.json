@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES6",
+    "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -14,15 +14,14 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "types": ["node"],
+    "baseUrl": ".",
     "paths": {
       "app/*": ["./src/app/*"],
       "lib/*": ["./src/lib/*"],
       "db/*": ["./src/db/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"],
-  "ts-node": {
-    "require": ["tsconfig-paths/register"]
-  }
+  "include": ["src/app/**/*.ts", "src/app/**/*.tsx", "src/assets.d.ts"],
+  "exclude": ["node_modules"]
 }

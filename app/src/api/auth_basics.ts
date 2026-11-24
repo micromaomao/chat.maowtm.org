@@ -1,85 +1,57 @@
 import { FetchedChatSession, fetchChatSession } from "lib/chat";
 import { strToHashBuf } from "lib/secure_token/nodejs";
 import { Client as DBClient, withDBClient } from "db/index";
-import { APIError, AuthError, InvalidChatSessionError } from "./basics"
+import { AuthError, InvalidChatSessionError } from "./basics";
+import type { Context, MiddlewareHandler } from "hono";
+import type { Env } from "../env";
 
-export async function hasValidAdminAuth(req): Promise<boolean> {
-  let authorization = req.get("Authorization");
-  if (typeof authorization != "string" || !authorization) {
-    return false;
-  }
-  const start = "Bearer ";
-  if (!authorization.startsWith(start)) {
-    return false;
-  }
-  let token_str = authorization.slice(start.length);
-  let hash = strToHashBuf(token_str);
-  if (!hash) {
-    throw new APIError(400, "Invalid admin token");
-  }
-  return await withDBClient(async db => {
-    let { rows }: { rows: any[] } = await db.query({
-      text: "select expiry from admin_token where token = $1",
-      values: [hash],
-    });
-    if (rows.length == 0) {
-      return false;
-    }
-    if (rows[0].expiry.getTime() < Date.now()) {
-      try {
-        await db.query({
-          text: "delete from admin_token where token = $1",
-          values: [hash],
-        });
-      } catch (e) {
-        console.error("Unable to delete expired admin token", e);
-      }
-      return false;
-    } else {
-      return true;
-    }
+export async function adminTokenHash(request: Request): Promise<Buffer | null> {
+  const authorization = request.headers.get("Authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
+  return strToHashBuf(authorization.slice(7));
+}
+
+export async function hasValidAdminAuth(request: Request): Promise<boolean> {
+  const hash = await adminTokenHash(request);
+  if (!hash) return false;
+  return withDBClient(async db => {
+    const { rows } = await db.query(
+      "select 1 from admin_token where token = $1 and expiry > now()", [hash]
+    );
+    return rows.length > 0;
   });
 }
 
-export async function requireAdminAuth(req, res, next) {
-  if (await hasValidAdminAuth(req) === true) {
-    return next();
-  }
-  const auth_error = new AuthError();
-  return next(auth_error);
+export const requireAdminAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
+  if (!await hasValidAdminAuth(c.req.raw)) throw new AuthError();
+  await next();
+};
+
+export async function requireValidChatTokenAuth(request: Request, session_id: string, db: DBClient): Promise<FetchedChatSession> {
+  const token = new URL(request.url).searchParams.get("chat_token");
+  const hash = token ? await strToHashBuf(token) : null;
+  if (!hash) throw new InvalidChatSessionError();
+  const { rows } = await db.query(
+    "select session_id from chat_session where session_id = $1 and session_token = $2",
+    [session_id, hash]
+  );
+  if (!rows.length) throw new InvalidChatSessionError();
+  return rows[0];
 }
 
-export async function requireValidChatTokenAuth(req, session_id: string, db: DBClient): Promise<FetchedChatSession> {
-  let token = req.query.chat_token;
-  if (typeof token != "string") {
-    throw new InvalidChatSessionError();
+export async function requireValidChatTokenOrAdmin(request: Request, session_id: string, db?: DBClient): Promise<FetchedChatSession> {
+  if (!db) return withDBClient(db => requireValidChatTokenOrAdmin(request, session_id, db));
+  if (await hasValidAdminAuth(request)) {
+    const session = await fetchChatSession(session_id, db);
+    if (!session) throw new InvalidChatSessionError();
+    return session;
   }
-  let hash_buf = strToHashBuf(token);
-  if (!hash_buf) {
-    throw new InvalidChatSessionError();
-  }
-  let res = await db.query({
-    text: "select session_id from chat_session where session_id = $1 and session_token = $2",
-    values: [session_id, hash_buf],
-  });
-  if (res.rows.length == 0) {
-    throw new InvalidChatSessionError();
-  }
-  return res.rows[0] as FetchedChatSession;
+  return requireValidChatTokenAuth(request, session_id, db);
 }
 
-export async function requireValidChatTokenOrAdmin(req, session_id: string, db?: DBClient): Promise<FetchedChatSession> {
-  if (!db) {
-    return await withDBClient(db => requireValidChatTokenOrAdmin(req, session_id, db));
+export function sameOrigin(c: Context<{ Bindings: Env }>): void {
+  const origin = c.req.header("Origin");
+  if (origin && origin !== new URL(c.req.url).origin) {
+    throw new AuthError();
   }
-  let session: FetchedChatSession;
-  if (await hasValidAdminAuth(req) === true) {
-    session = await fetchChatSession(session_id, db);
-    if (!session) {
-      throw new InvalidChatSessionError();
-    }
-  } else {
-    session = await requireValidChatTokenAuth(req, session_id, db);
-  }
-  return session;
 }

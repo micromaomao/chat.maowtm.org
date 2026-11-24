@@ -23,37 +23,25 @@ export interface NewChatSuggestionEvent extends ChatSessionEvent {
 export async function setMessageSuggestions(reply_msg_id: string, suggestions: string[], db: DBClient): Promise<NewChatSuggestionEvent> {
   // Cannot insert multiple commands into a prepared statement (even without
   // statement name)
-  await db.query("begin transaction isolation level serializable");
-  let sess_id;
-  try {
-    await db.query({
-      text: "delete from chat_suggestion where reply_msg = $1",
-      values: [reply_msg_id]
-    });
-    await db.query({
-      name: "chat_suggestions.ts#setMessageSuggestions#insert",
-      text: `
-        insert into chat_suggestion (reply_msg, suggestion)
-          select
-            unnest(array_fill($1::text, array[array_length($2::text[], 1)])),
-            unnest($2::text[])`,
-      values: [reply_msg_id, suggestions]
-    });
-    let res = await db.query({
-      text: "select session from chat_message where id = $1",
-      values: [reply_msg_id]
-    });
-    sess_id = res.rows[0].session;
-    await db.query("commit");
-  } finally {
-    await db.query("rollback");
-  }
+  await db.query({
+    text: "delete from chat_suggestion where reply_msg = $1",
+    values: [reply_msg_id]
+  });
+  await db.query({
+    text: "insert into chat_suggestion (reply_msg, suggestion) select $1, unnest($2::text[])",
+    values: [reply_msg_id, suggestions]
+  });
+  const res = await db.query({
+    text: "select session from chat_message where id = $1",
+    values: [reply_msg_id]
+  });
+  const sess_id = res.rows[0].session;
   let evt: NewChatSuggestionEvent = {
     _event: ChatSessionEventType.NewSuggestions,
     reply_msg: reply_msg_id,
     suggestions
   };
-  mq.queue.emit(sess_id, evt);
+  await mq.publish(sess_id, evt, db);
   return evt;
 }
 

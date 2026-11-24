@@ -4,3 +4,6 @@
 .env*
 tmp
 api.client.dist
+.dev.vars*
+.wrangler
+*.tsbuildinfo

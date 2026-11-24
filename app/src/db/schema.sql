@@ -59,7 +59,7 @@ create table chat_message (
   -- This field mostly exist as a cache hint for nb_tokens.
   generation_model text default null,
 
-  -- Number of tokens using the tokenization scheme of .generation_model
+  -- Estimated token count; the Workers AI backend uses character counts.
   nb_tokens int default null
 );
 
@@ -75,7 +75,7 @@ create table chat_message_embedding (
   -- Array of floats
   embedding jsonb not null,
 
-  -- Number of tokens using the tokenization scheme of .model
+  -- Estimated token count; the Workers AI backend uses character counts.
   nb_tokens int not null,
 
   primary key (msg, model)
@@ -127,7 +127,7 @@ create table dialogue_phrasing_embedding (
   -- Array of floats
   embedding jsonb not null,
 
-  -- Number of tokens using the tokenization scheme of .model
+  -- Estimated token count; the Workers AI backend uses character counts.
   nb_tokens int not null,
 
   generation_time timestamptz not null default now(),

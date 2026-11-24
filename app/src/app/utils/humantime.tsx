@@ -12,7 +12,7 @@ export class Humantime extends React.Component<P> {
   }
 
   componentDidMount() {
-    this.interval = setInterval(() => {
+    this.interval = window.setInterval(() => {
       this.forceUpdate();
     }, 1000);
   }

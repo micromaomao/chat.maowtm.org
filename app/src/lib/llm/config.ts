@@ -1,29 +1,22 @@
-import * as cfg from "db/config";
-import { LLMBase } from "./base";
-import { OpenAIChatCompletionModel, OpenAIEmbeddingModel } from "./openai";
-import { ReplicateLLAMA } from "./replicate";
+import type { GenerationModel, Model } from "db/config";
+import { WorkersAIModel } from "./workers_ai";
+import { runtime } from "../../runtime";
 
-export function embeddingModelFromConfig(config: cfg.Model): LLMBase {
-  switch (config.type) {
-    case "openai":
-      return new OpenAIEmbeddingModel(config.name);
-    default:
-      throw new Error(`Unknown embedding model type: ${config.type}`);
+function checkModel(config: Model) {
+  if (config.type !== "workers-ai" || !config.name.startsWith("@cf/")) {
+    throw new Error("Only Cloudflare Workers AI models are supported. Run reembed --activate to migrate the configuration.");
   }
 }
 
-export function chatCompletionModelFromConfig(config: cfg.GenerationModel): LLMBase {
-  switch (config.type) {
-    case "openai-chat":
-      return new OpenAIChatCompletionModel(config.name, Object.assign({}, {
-        max_tokens: config.reserve_token_count
-      }, config.config));
-    case "replicate-llama-chat":
-      return new ReplicateLLAMA(config.name, Object.assign({}, {
-        max_new_tokens: config.reserve_token_count,
-        model_id: config.name,
-      }, config.config));
-    default:
-      throw new Error(`Unknown chat model type: ${config.type}`);
-  }
+export function embeddingModelFromConfig(config: Model): WorkersAIModel {
+  checkModel(config);
+  return new WorkersAIModel(runtime().env.AI, config.name, config.config);
+}
+
+export function chatCompletionModelFromConfig(config: GenerationModel): WorkersAIModel {
+  checkModel(config);
+  return new WorkersAIModel(runtime().env.AI, config.name, {
+    ...config.config,
+    max_tokens: config.reserve_token_count,
+  });
 }

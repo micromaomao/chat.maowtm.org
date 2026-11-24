@@ -6,6 +6,7 @@ import {
   RouterProvider,
   createBrowserRouter,
   useRouteError,
+  isRouteErrorResponse,
   useNavigate
 } from "react-router-dom";
 import * as adminPath from "./admin";
@@ -13,7 +14,7 @@ import * as adminPath from "./admin";
 function ErrorBoundary() {
   const error = useRouteError();
   const navigate = useNavigate();
-  if (error.status == 404) {
+  if (isRouteErrorResponse(error) && error.status == 404) {
     return (
       <div>
         <Alert

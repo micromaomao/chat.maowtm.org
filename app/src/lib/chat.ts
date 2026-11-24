@@ -4,14 +4,11 @@ import * as mq from "db/mq";
 import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
 import { FetchedChatMessage, MsgTypeStr, NewChatSessionResult, msgTypeToStr } from "../api/v1/types"
 import { MsgType } from "db/enums";
-import client_tags from "db/client_tag";
 import { nestProperties } from "./utils";
-import { generateToken } from "./secure_token/nodejs";
-import { cancelGenerationTask, startBackgroundGenerateResponseTask } from "./gen_response";
+import { generateToken, tokenFromClientTag } from "./secure_token/nodejs";
 import { ItemsMatchTree, MatchDialogueResult, ReconstructedItemMatchResult, getCachedMatcher } from "./match_dialogue";
-import { APIError, GlobalChatRateLimitExceeded } from "../api/basics";
-import { RateLimit } from "db/rate_limit";
-import { response, type Response } from "express";
+import { APIError } from "../api/basics";
+import type { RateLimitBumpResponse } from "db/rate_limit";
 
 export interface FetchLastChatMessagesOptions {
   session_id: string;
@@ -28,7 +25,8 @@ const _fetchMessageCommonSelectPart = `
     mtd.reply_msg is not null as "metadata._exists",
     mtd.last_edit is not null as "metadata.updated_before",
     mtd.user_feedback as "metadata.user_feedback",
-    msg.exclude_from_generation as exclude_from_generation
+    msg.exclude_from_generation as exclude_from_generation,
+    (select tag from client_tag where message = msg.id limit 1) as client_tag
   from chat_message msg
   left outer join chat_reply_metadata mtd
     on msg.id = mtd.reply_msg
@@ -37,7 +35,7 @@ const _fetchMessageCommonSelectPart = `
 async function _processFetchedMessageRow(row: any): Promise<any> {
   row = nestProperties(row);
   row.msg_type = msgTypeToStr(row.msg_type);
-  row.client_tag = await client_tags.ulidToTag(row.id);
+  if (row.client_tag === null) delete row.client_tag;
   if (row.metadata) {
     if (!row.metadata._exists) {
       delete row.metadata;
@@ -73,6 +71,7 @@ export async function fetchSingleMessage(message_id: string, db?: DBClient): Pro
   if (!db) {
     return await withDBClient(db => fetchSingleMessage(message_id, db));
   }
+
   let { rows }: { rows: any[] } = await db.query({
     name: "chats.ts#fetchSingleMessage",
     text: `
@@ -88,6 +87,13 @@ export async function fetchSingleMessage(message_id: string, db?: DBClient): Pro
   }
   let res = await _processFetchedMessageRow(rows[0]);
   return res as FetchedChatMessage;
+}
+
+export async function fetchMessagesByIds(ids: string[], db: DBClient): Promise<Map<string, FetchedChatMessage>> {
+  const { rows } = await db.query(`${_fetchMessageCommonSelectPart} where msg.id = any($1)`, [ids]);
+  const messages = new Map<string, FetchedChatMessage>();
+  for (const row of rows) messages.set(row.id, await _processFetchedMessageRow(row));
+  return messages;
 }
 
 export interface NewChatMessage {
@@ -110,13 +116,13 @@ export interface NewChatMessageReplyMetadata extends MatchDialogueResult {
   model_chat_inputs: string[];
 }
 
-export async function userNewChatPreCheck(session_id: string, db: DBClient, http_res: Response): Promise<void> {
+export async function userNewChatPreCheck(session_id: string, db: DBClient): Promise<RateLimitBumpResponse | undefined> {
   let conf_store = await getConfigStore();
   let conf = conf_store.config;
   if (!conf.allow_new_chat) {
     throw new APIError(503, "The server has disabled new chat messages at this time.");
   }
-  await conf_store.enforceGlobalRateLimit(http_res, db);
+  return conf_store.enforceGlobalRateLimit(db);
 }
 
 export async function addChatMessage(message: NewChatMessage, db_client?: DBClient): Promise<NewChatMessageEvent> {
@@ -161,10 +167,7 @@ export async function addChatMessage(message: NewChatMessage, db_client?: DBClie
     ...message,
     id
   };
-  mq.queue.emit(message.session_id, msg_evt);
-  if (message.msg_type == MsgType.User && !message.supress_generation) {
-    await startBackgroundGenerateResponseTask(msg_evt);
-  }
+  await mq.publish(message.session_id, { _event: msg_evt._event, id }, db_client);
   return msg_evt;
 }
 
@@ -190,12 +193,12 @@ export async function userNewSessionPreCheck(db?: DBClient): Promise<void> {
   }
 }
 
-export async function newChatSssion(db?: DBClient): Promise<NewChatSessionResult> {
+export async function newChatSssion(db?: DBClient, client_tag?: string): Promise<NewChatSessionResult> {
   if (!db) {
-    return await withDBClient(db => newChatSssion(db));
+    return await withDBClient(db => newChatSssion(db, client_tag));
   }
   const conf_store = await getConfigStore();
-  const [token_str, token_buf] = await generateToken();
+  const [token_str, token_buf] = client_tag ? await tokenFromClientTag(client_tag) : await generateToken();
   const res = await db.query({
     text: "insert into chat_session (session_token) values ($1) returning session_id;",
     values: [token_buf],
@@ -230,7 +233,6 @@ export async function findChatMessageSession(message_id: string, db: DBClient): 
 }
 
 export async function rollbackChat(session_id: string, first_message_id_to_exclude: string, db: DBClient): Promise<void> {
-  cancelGenerationTask(session_id);
   await db.query({
     text: `
       update chat_message set exclude_from_generation = true
@@ -238,6 +240,8 @@ export async function rollbackChat(session_id: string, first_message_id_to_exclu
           (msg_type = ${MsgType.User} or msg_type = ${MsgType.Bot})`,
     values: [session_id, first_message_id_to_exclude],
   });
+  await db.query("delete from chat_generation_job where session = $1", [session_id]);
+  await mq.publish(session_id, { _event: ChatSessionEventType.Reset }, db);
 }
 
 export interface ExcludeSingleMessageEvent extends ChatSessionEvent {
@@ -257,7 +261,7 @@ export async function excludeSingleMessage(message_id: string, db: DBClient): Pr
     _event: ChatSessionEventType.ExcludeSingleMessage,
     id: message_id,
   };
-  mq.queue.emit(rows[0].session, evt);
+  await mq.publish(rows[0].session, evt, db);
   return evt;
 }
 

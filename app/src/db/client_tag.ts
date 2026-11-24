@@ -1,99 +1,50 @@
-/**
- * A manager class for idempotent tags.
- */
+import { withDBClient } from ".";
+import { clientTagKey, tokenFromClientTag } from "../lib/secure_token/nodejs";
 
 interface ClientTagEntry {
-  response: any;
-
-  // milliseconds since epoch
-  time: number;
-
-  // Random data affixed to the tag.
-  ulid?: string;
+  response: unknown;
 }
-
-const TAG_TTL = 1000 * 60 * 30;
 
 class ClientTagManager {
-  private stored_tags: Map<string, ClientTagEntry> = new Map();
-  private sorted_tag_names: string[] = [];
-  private ulid_to_tag: Map<string, string> = new Map();
-
-  constructor() {
-    setInterval(() => this.cleanup(), 1000 * 10);
-  }
-
-  async checkTag(tag: string | undefined): Promise<ClientTagEntry | null> {
-    if (!tag) {
-      return null;
-    }
-    const tag_entry = this.stored_tags.get(tag);
-    if (tag_entry == undefined) {
-      return null;
-    }
-    const now = Date.now();
-    if (tag_entry.time + TAG_TTL < now) {
-      this.stored_tags.delete(tag);
-      if (tag_entry.ulid) {
-        this.ulid_to_tag.delete(tag_entry.ulid);
+  async checkTag(tag: string | undefined, scope: string): Promise<ClientTagEntry | null> {
+    if (!tag) return null;
+    const key = await clientTagKey(tag, scope);
+    return withDBClient(async db => {
+      const { rows } = await db.query(
+        "select response from client_tag where scope = $1 and tag = $2",
+        [scope, key]
+      );
+      const entry = rows[0];
+      if (!entry) return null;
+      if (scope === "new-session") {
+        const [chat_token] = await tokenFromClientTag(tag);
+        return { response: { ...entry.response, chat_token } };
       }
-      return null;
-    }
-    return tag_entry;
-  }
-
-  async setTag(tag: string | undefined, response: any, ulid?: string) {
-    if (!tag) {
-      return;
-    }
-    this.stored_tags.set(tag, {
-      response,
-      time: Date.now(),
-      ulid
+      return entry;
     });
-    if (ulid) {
-      this.ulid_to_tag.set(ulid, tag);
-    }
   }
 
-  async ulidToTag(ulid: string): Promise<string | undefined> {
-    const tag = this.ulid_to_tag.get(ulid);
-    if (tag === undefined) {
-      return undefined;
-    }
-    const tag_entry = this.stored_tags.get(tag);
-    if (tag_entry === undefined) {
-      this.ulid_to_tag.delete(ulid);
-      return undefined;
-    }
-    if (tag_entry.time + TAG_TTL < Date.now()) {
-      this.ulid_to_tag.delete(ulid);
-      this.stored_tags.delete(tag);
-      return undefined;
-    }
-    return tag;
-  }
-
-  async cleanup() {
-    let nb_to_delete = 0;
-    const now = Date.now();
-    for (const tag_name of this.sorted_tag_names) {
-      const tag_entry = this.stored_tags.get(tag_name);
-      if (tag_entry == undefined) {
-        nb_to_delete += 1;
-      } else if (tag_entry.time + TAG_TTL < now) {
-        this.stored_tags.delete(tag_name);
-        if (tag_entry.ulid) {
-          this.ulid_to_tag.delete(tag_entry.ulid);
-        }
-        nb_to_delete += 1;
-      } else {
-        break;
+  async setTag(tag: string | undefined, response: unknown, scope: string, message?: string): Promise<void> {
+    if (!tag) return;
+    const key = await clientTagKey(tag, scope);
+    if (scope === "new-session") {
+      if (typeof response !== "object" || response === null || !("session_id" in response)) {
+        throw new Error("Invalid new-session idempotency response");
       }
+      response = { session_id: response.session_id };
     }
-    this.sorted_tag_names.splice(0, nb_to_delete);
+    await withDBClient(db => db.query(
+      "insert into client_tag (scope, tag, response, message) values ($1, $2, $3, $4)",
+      [scope, key, JSON.stringify(response), message]
+    ));
+  }
+
+  async ulidToTag(message: string): Promise<string | undefined> {
+    return withDBClient(async db => {
+      const { rows } = await db.query("select tag from client_tag where message = $1", [message]);
+      return rows[0]?.tag;
+    });
   }
 }
 
-const instance = new ClientTagManager();
-export default instance;
+export default new ClientTagManager();

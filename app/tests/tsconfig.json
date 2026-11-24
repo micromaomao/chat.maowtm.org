@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.worker.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "noEmit": true
+  },
+  "include": ["./**/*.test.ts", "./staging-smoke.ts", "./env.d.ts", "../src/text.d.ts"],
+  "exclude": []
+}

@@ -1,8 +1,7 @@
-import Router from "lib/promise_router";
-import v1router from "./v1";
+import { Hono } from "hono";
+import type { Env } from "../env";
+import v1 from "./v1";
 
-const apiRouter = Router();
-
-apiRouter.use("/v1", v1router);
-
-export default apiRouter;
+const app = new Hono<{ Bindings: Env }>();
+app.route("/v1", v1);
+export default app;

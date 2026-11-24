@@ -3,11 +3,12 @@ import { DialogueItemInput, DialoguePath, DialoguePathElement, FetchedDialogueIt
 import { Client as DBClient, withDBClient } from "../db/index";
 import getConfigStore from "db/config";
 import { APIError } from "../api/basics";
-import { ListDialogueItemsResult } from "app/openapi";
+import type { ListDialogueItemsResult } from "../../api.client.dist";
 import { deleteCachedMatcher } from "./match_dialogue";
 import { ChatSessionEvent, ChatSessionEventType } from "db/mq";
 import * as mq from "db/mq"
 import { ChatMessageNotFoundError } from "./chat";
+import { estimateTokens } from "./llm/models";
 
 export class DialogueItemNotFoundError extends APIError {
   constructor(item_id: string) {
@@ -66,20 +67,23 @@ export async function fetchDialogueItem(item_id: string, db: DBClient): Promise<
 }
 
 export async function createPhrasingEmbedding(phrasing_id: string, q_text: string, db: DBClient, abort?: AbortSignal): Promise<void> {
-  let conf_store = await getConfigStore();
-  let emb_res = await conf_store.embedding_model.getEmbeddings(q_text, {}, abort);
-  await db.query({
-    text: `
-      insert into dialogue_phrasing_embedding
-        (phrasing, model, embedding, nb_tokens)
-      values ($1, $2, $3::jsonb, $4)`,
-    values: [
-      phrasing_id,
-      conf_store.embedding_model.model_name,
-      JSON.stringify(emb_res.embedding),
-      emb_res.total_tokens
-    ],
-  });
+  await createPhrasingEmbeddings([{ id: phrasing_id, text: q_text }], db, abort);
+}
+
+async function createPhrasingEmbeddings(phrasings: { id: string; text: string }[], db: DBClient, abort?: AbortSignal): Promise<void> {
+  const model = (await getConfigStore()).embedding_model;
+  for (let start = 0; start < phrasings.length; start += 32) {
+    const batch = phrasings.slice(start, start + 32);
+    const vectors = await model.getEmbeddingsBatch(batch.map(phrasing => phrasing.text), abort);
+    for (let index = 0; index < batch.length; index++) {
+      const phrasing = batch[index];
+      await db.query(
+        `insert into dialogue_phrasing_embedding (phrasing, model, embedding, nb_tokens, source_text)
+         values ($1, $2, $3::jsonb, $4, $5)`,
+        [phrasing.id, model.model_name, JSON.stringify(vectors[index]), estimateTokens(phrasing.text), phrasing.text]
+      );
+    }
+  }
 }
 
 export async function updateItemPhrasings(item_id: string, new_phrasings: string[], db: DBClient): Promise<void> {
@@ -152,9 +156,7 @@ export async function updateItemPhrasings(item_id: string, new_phrasings: string
       values: [to_remove.map(p => p.id)]
     });
   }
-  for (let obj of to_embed) {
-    await createPhrasingEmbedding(obj.id!, obj.text, db);
-  }
+  await createPhrasingEmbeddings(to_embed, db);
 }
 
 export async function fetchDialogueItemPhrasings(item_id: string, db: DBClient): Promise<string[]> {
@@ -251,7 +253,7 @@ export async function _editMsgCommitEditLog(message_id: string, edited_item_id: 
     id: message_id,
     edited_item_id,
   };
-  mq.queue.emit(session_id, evt);
+  await mq.publish(session_id, evt, db);
   return evt;
 }
 

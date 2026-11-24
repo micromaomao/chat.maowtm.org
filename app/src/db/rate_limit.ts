@@ -1,6 +1,4 @@
 import { withDBClient, Client as DBClient } from ".";
-import { escapeLiteral } from "pg"
-import type { Response } from "express";
 
 export interface RateLimitBumpResponse {
   success: boolean;
@@ -21,10 +19,7 @@ export class RateLimit {
     }
   }
 
-  /**
-   * If `http_res` is provided, will attach RateLimit-* headers to it.
-   */
-  public async bump(db?: DBClient, http_res?: Response): Promise<RateLimitBumpResponse> {
+  public async bump(db?: DBClient): Promise<RateLimitBumpResponse> {
     if (!db) {
       return await withDBClient(db => this.bump(db));
     }
@@ -71,15 +66,6 @@ export class RateLimit {
       reset,
       reset_remaining_secs,
     };
-    if (http_res) {
-      let existing_rem = parseInt(http_res.get("RateLimit-Remaining"));
-      if (Number.isNaN(existing_rem) || existing_rem > remaining) {
-        http_res
-          .set("RateLimit-Limit", this.limit.toString())
-          .set("RateLimit-Remaining", remaining.toString())
-          .set("RateLimit-Reset", reset_remaining_secs.toString());
-      }
-    }
     return ret;
   }
 }

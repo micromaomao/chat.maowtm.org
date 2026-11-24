@@ -1,6 +1,6 @@
 import React, { RefObject } from "react";
 import { getCredentialManager, subscribe as credentialsSubscribe } from "app/utils/credentials";
-import { DefaultService as API, ApiError, ChatSession, ChatSuggestions, DefaultService, Message, MessageType, OpenAPI } from "app/openapi"
+import { DefaultService as API, ApiError, ChatSession, ChatSuggestions, DefaultService, Message, MessageType } from "app/openapi"
 import ChatSkeleton from "app/components/chatSkeleton";
 import StartNewChatButton from "./startNewChatButton";
 import * as classes from "./chatController.module.css"
@@ -12,7 +12,7 @@ import * as MessageInputBox from "./messageInputBox";
 import { generateToken } from "lib/secure_token/browser";
 import { MaybeShowTyping } from "./typingAnimation";
 import { SharedStateProvider } from "app/utils/sharedstate";
-import { fetchEventSource } from "@microsoft/fetch-event-source"
+import { ChatSocket } from "app/utils/chatSocket";
 import { chatControllerContext } from "./contexts";
 import { clearReplyAnalysisCache } from "app/utils/replyAnalysis";
 import ChatInitialBanner from "./chatInitialBanner";
@@ -75,8 +75,8 @@ export class ChatController extends React.Component<P, S> {
   containerRef: RefObject<HTMLDivElement>;
   unsubscribeCredentials: () => void;
 
-  sseController: AbortController | null = null;
-  ssePingTimeout: number | null = null;
+  chatSocket: ChatSocket | null = null;
+  private lifecycle = 0;
 
   inputBoxRef: RefObject<MessageInputBox.R>;
 
@@ -124,41 +124,40 @@ export class ChatController extends React.Component<P, S> {
   }
 
   clearTypingOnMsg(msg_id: string) {
-    if (this.state.typingFor !== null && this.state.typingFor <= msg_id) {
-      this.setState({
+    this.setState(state => state.typingFor !== null && state.typingFor <= msg_id ? {
         typingFor: null,
         typingExpiry: null,
-      });
-    }
+      } : null);
   }
 
   showTyping(msg_id: string) {
-    if (this.state.typingFor === null || this.state.typingFor < msg_id) {
-      this.setState({
+    this.setState(state => {
+      if (state.messages.some(message => message.id > msg_id &&
+        [MessageType.BOT, MessageType.ERROR].includes(message.msg_type))) return null;
+      if (state.typingFor !== null && state.typingFor >= msg_id) return null;
+      return {
         typingFor: msg_id,
-        typingExpiry: Date.now() + 8000,
-      });
-    }
+        typingExpiry: Date.now() + 60000,
+      };
+    });
   }
 
   updateMessage(message: Message) {
-    const messages = this.state.messages.slice();
-    const insert_loc = messages.findIndex(m => m.id >= message.id);
-    if (insert_loc == -1) {
-      messages.push(message);
-    } else if (messages[insert_loc].id == message.id) {
-      messages[insert_loc] = message;
-    } else {
-      messages.splice(insert_loc, 0, message);
-    }
-
-    this.setState({
-      messages: messages,
+    this.setState(state => {
+      const messages = state.messages.slice();
+      const insert_loc = messages.findIndex(m => m.id >= message.id);
+      if (insert_loc == -1) {
+        messages.push(message);
+      } else if (messages[insert_loc].id == message.id) {
+        messages[insert_loc] = message;
+      } else {
+        messages.splice(insert_loc, 0, message);
+      }
+      return {
+        messages,
+        inTransitMessages: state.inTransitMessages.filter(phantom => phantom.client_tag !== message.client_tag),
+      };
     });
-
-    if (message.client_tag) {
-      this.updatePhantom(message.client_tag, null);
-    }
 
     if (message.msg_type == MessageType.BOT || message.msg_type == MessageType.ERROR) {
       this.clearTypingOnMsg(message.id);
@@ -166,127 +165,64 @@ export class ChatController extends React.Component<P, S> {
   }
 
   updatePhantom(client_tag: string, phantom: PhantomMessage | null) {
-    let inTransitMessages = this.state.inTransitMessages.filter(x => x.client_tag != client_tag);
-    if (phantom) {
-      if (this.state.messages.findIndex(x => x.client_tag == client_tag) == -1) {
+    this.setState(state => {
+      const inTransitMessages = state.inTransitMessages.filter(x => x.client_tag != client_tag);
+      if (phantom && !state.messages.some(message => message.client_tag === client_tag)) {
         inTransitMessages.push(phantom);
       }
-    }
-    this.setState({
-      inTransitMessages: inTransitMessages,
+      return { inTransitMessages };
     });
   }
 
-  stopSSE() {
-    if (this.ssePingTimeout) {
-      clearTimeout(this.ssePingTimeout);
-      this.ssePingTimeout = null;
-    }
-    if (this.sseController) {
-      this.sseController.abort();
-      this.sseController = null;
-    }
+  stopWebSocket() {
+    this.chatSocket?.stop();
+    this.chatSocket = null;
   }
 
-  startSSE(): Promise<void> {
-    this.stopSSE();
-    let maybe_token = "";
-    if (this.chat_token) {
-      maybe_token = `chat_token=${encodeURIComponent(this.chat_token)}`;
-    }
-    let abort_controller = new AbortController();
-    this.sseController = abort_controller;
-
-    const ssePingTimeout = () => {
-      if (this.sseController !== abort_controller) return;
-      console.error("Did not receive SSE ping for 10 seconds, re-opening a new connection...");
-      this.setState({
-        messages_error: new Error("Reestablishing connection to server...")
-      });
-      this.startSSE().catch(err => {
-        console.error("Failed to re-open SSE connection:", err);
-        this.setState({ messages_error: new Error("Connection to server lost, latest messages may not be displayed.") });
-      });
-    }
-    const refreshSSEPingTimeout = () => {
-      if (this.sseController !== abort_controller) return;
-      if (this.ssePingTimeout) {
-        clearTimeout(this.ssePingTimeout);
-      }
-      this.ssePingTimeout = setTimeout(ssePingTimeout, 10000);
-    };
-
-    let resolved = false;
-
-    return new Promise((resolve, reject) => {
-      refreshSSEPingTimeout();
-      fetchEventSource(
-        `/api/v1/chat-session/${encodeURIComponent(this.props.chat_id)}/stream?${maybe_token}`,
-        {
-          method: "GET",
-          headers: { ...OpenAPI.HEADERS },
-          signal: abort_controller.signal,
-          openWhenHidden: true,
-          onopen: async (response) => {
-            if (this.sseController !== abort_controller) return;
-            if (resolved) return;
-            resolve();
-            resolved = true;
-            refreshSSEPingTimeout();
-            this.reloadMessages().then(() => {
-              this.setState({ messages_error: null });
-            });
-          },
-          onerror: (err) => {
-            if (this.sseController !== abort_controller) return;
-            if (resolved) {
-              console.error("SEE connection closed unexpectedly.");
-              this.startSSE().catch(e => {
-                console.error("Unable to restart SSE connection.", e);
-                this.setState({
-                  messages_error: new Error("Connection to server lost, latest messages may not be displayed.")
-                });
-              });
-            } else {
-              reject(new Error("Unable to start server-sent events connection: " + err.message, { cause: err }));
-              this.stopSSE();
-              throw err;
-            }
-          },
-          onmessage: (evt) => {
-            if (this.sseController !== abort_controller) return;
-            refreshSSEPingTimeout();
-            switch (evt.event) {
-              case "message":
-                let msg: Message = JSON.parse(evt.data);
-                this.updateMessage(msg);
-                break;
-              case "deleteMessage":
-                let id = evt.data;
-                let idx = this.state.messages.findIndex(m => m.id == id);
-                if (idx != -1) {
-                  let copy = this.state.messages.slice();
-                  copy.splice(idx, 1);
-                  this.setState({ messages: copy });
-                }
-                break;
-              case "suggestions":
-                let suggestions: ChatSuggestions = JSON.parse(evt.data);
-                this.setState({ suggestions: suggestions });
-                break;
-              case "ping":
-                break;
-              default:
-                console.error("Unknown SSE event:", evt.event, evt.data);
-                break;
-            }
-          },
+  startWebSocket(): Promise<void> {
+    this.stopWebSocket();
+    const socket = new ChatSocket(
+      this.session_id,
+      () => ({ chatToken: this.chat_token, adminToken: this.admin_token }),
+      event => {
+        if (this.chatSocket !== socket) return;
+        switch (event.event) {
+          case "snapshot": {
+            const snapshot: ChatSession = event.data;
+            this.setState(state => ({
+              messages: snapshot.messages,
+              suggestions: snapshot.last_suggestions || null,
+              initial_loading: false,
+              inTransitMessages: state.inTransitMessages.filter(phantom =>
+                !snapshot.messages.some(message => message.client_tag === phantom.client_tag)),
+            }));
+            const last = snapshot.messages[snapshot.messages.length - 1];
+            if (last?.msg_type === MessageType.USER && !last.exclude_from_generation) this.showTyping(last.id);
+            else if (last) this.clearTypingOnMsg(last.id);
+            break;
+          }
+          case "message":
+            this.updateMessage(event.data);
+            break;
+          case "suggestions":
+            this.setState({ suggestions: event.data });
+            break;
+          case "cursor":
+            break;
+          default:
+            console.error("Unknown chat event", event.event);
         }
-      );
-    });
+      },
+      error => {
+        if (this.chatSocket === socket) this.setState({ messages_error: error });
+      },
+    );
+    this.chatSocket = socket;
+    return socket.start();
   }
 
   async initialize() {
+    const lifecycle = ++this.lifecycle;
     clearReplyAnalysisCache();
     try {
       if (!this.chat_token && !this.admin_token) {
@@ -297,30 +233,15 @@ export class ChatController extends React.Component<P, S> {
         return;
       }
       let sess_id = this.session_id;
-      let arr = await Promise.allSettled([
-        fetchChatData(sess_id).then(init_msg_list => {
-          if (this.session_id != sess_id) return;
-          this.setState({
-            messages: init_msg_list.messages,
-            suggestions: init_msg_list.last_suggestions,
-            initial_loading: false,
-            messages_error: null,
-          });
-        }),
-        this.startSSE(),
-      ]);
+      await this.startWebSocket();
       if (this.session_id != sess_id) return;
-      for (let elem of arr) {
-        if (elem.status == "rejected") {
-          throw elem.reason;
-        }
-      }
     } catch (e) {
+      if (this.lifecycle !== lifecycle) return;
       this.setState({
         messages_error: e,
         initial_loading: false,
       });
-      this.stopSSE();
+      this.stopWebSocket();
     }
   }
 
@@ -335,7 +256,8 @@ export class ChatController extends React.Component<P, S> {
   }
 
   unload() {
-    this.stopSSE();
+    this.lifecycle++;
+    this.stopWebSocket();
     this.setState(InitialState);
   }
 
@@ -382,7 +304,7 @@ export class ChatController extends React.Component<P, S> {
         client_tag: phantom.client_tag,
       });
       if (this.session_id != sess) return;
-      // Phantom will be automatically removed by SSE event.
+      // The server echoes the client tag through the WebSocket.
       this.showTyping(msg_id);
     } catch (e) {
       if (this.session_id != sess) return;

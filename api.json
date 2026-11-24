@@ -160,45 +160,36 @@
         }
       ]
     },
-    "/chat-session/{session_id}/stream": {
+    "/chat-session/{session_id}/ws": {
       "get": {
-        "summary": "Stream new updates from a chat session using server-sent events",
-        "description": "Push any future update to the messages in a chat session via server-sent events.\n\nTo authenticate, provide either `chatToken` or `adminToken`.",
+        "summary": "Receive live chat updates over a hibernating WebSocket",
+        "description": "Obtain a single-use ticket with ws-ticket first. On reconnect, supply the last received event id as after. The server sends a snapshot or missed events, then ready. Send ping for an automatic pong without waking the Durable Object.",
         "operationId": "",
         "tags": [],
         "parameters": [
           {
             "in": "query",
-            "name": "chat_token",
-            "description": "Chat token authentication",
+            "name": "ticket",
+            "description": "Single-use WebSocket ticket, valid for 60 seconds",
             "schema": {
               "type": "string"
-            }
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "description": "Last received event id",
+            "schema": { "type": "string", "pattern": "^[0-9]{1,20}$" }
           }
         ],
         "responses": {
-          "200": {
-            "headers": {},
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatSessionEventStream"
-                }
-              }
-            }
-          },
+          "101": { "description": "WebSocket upgrade" },
           "404": {
             "description": "Invalid chat ID or token"
           }
         },
-        "security": [
-          {
-            "chatToken": []
-          },
-          {
-            "adminToken": []
-          }
-        ]
+        "security": []
       },
       "parameters": [
         {
@@ -211,6 +202,31 @@
           "required": true
         }
       ]
+    },
+    "/chat-session/{session_id}/ws-ticket": {
+      "post": {
+        "summary": "Create a single-use WebSocket ticket",
+        "parameters": [
+          { "in": "path", "name": "session_id", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "chat_token", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ticket"],
+                  "properties": { "ticket": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "404": { "description": "Invalid chat ID or token" }
+        },
+        "security": [{ "chatToken": [] }, { "adminToken": [] }]
+      }
     },
     "/chat-session/{session_id}/send-chat": {
       "post": {
@@ -479,6 +495,48 @@
       }
     },
     "/debug-embeddings": {
+      "post": {
+        "summary": "Embed a batch using the Workers AI binding",
+        "tags": ["admin"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "input"],
+                "properties": {
+                  "model": { "type": "string", "pattern": "^@cf/" },
+                  "input": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 24000 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Normalized embeddings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "No admin auth" }
+        },
+        "security": [{ "adminToken": [] }]
+      },
       "get": {
         "summary": "An endpoint to support inspecting embeddings",
         "description": "",
@@ -937,25 +995,19 @@
       },
       "ChatSessionEventStream": {
         "type": "object",
+        "required": ["id", "event"],
         "properties": {
-          "message": {
-            "$ref": "#/components/schemas/Message"
-          },
-          "deleteMessage": {
-            "type": "string",
-            "description": "Signal that a message should be hidden. Value is the message ID.",
-            "example": "01H5FNEQ6TSSP9ZJ8T2RKAGGGD"
-          },
-          "suggestions": {
-            "$ref": "#/components/schemas/ChatSuggestions"
-          },
-          "ping": {
-            "type": "string",
-            "description": "A ping message sent periodically every 5 seconds to allow the client to detect dead connections",
-            "example": "ping"
+          "id": { "type": "string", "description": "Durable event cursor" },
+          "event": { "type": "string", "enum": ["message", "snapshot", "suggestions", "ready", "cursor"] },
+          "data": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/Message" },
+              { "$ref": "#/components/schemas/ChatSession" },
+              { "$ref": "#/components/schemas/ChatSuggestions" }
+            ]
           }
         },
-        "description": "A sequence of server-sent events, can be any of the following event type:"
+        "description": "JSON WebSocket frame. ready and cursor frames have no data. Application ping/pong are plain strings handled without waking the Durable Object."
       },
       "ChatSuggestions": {
         "type": "object",
@@ -1000,7 +1052,7 @@
       },
       "IdempotentTag": {
         "type": "string",
-        "description": "Optional - an arbitrary, max-48-chars tag provided by the client. For a limited period onwards, follow-on requests with the same tag are ignored (and returns the previously returned response). This tag is also returned in other useful context. You must ensure that this tag is a securely generated unique value per intended request.",
+        "description": "Optional securely random, max-48-chars idempotency key. Persisted in Postgres and scoped to the operation and session, so retries survive restarts. Reuse only for the same intended request.",
         "example": "r9/dZCAekueKMhZ4bYETLMdz",
         "minLength": 1,
         "maxLength": 48

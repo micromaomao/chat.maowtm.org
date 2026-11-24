@@ -1,18 +1,15 @@
 import { withDBClient, Client as DBClient } from ".";
 import package_json from "../../package.json";
-import * as mq from "./mq";
-import * as path from "path";
-import { readFileSync } from "fs";
+import DEFAULT_PROMPT_TEMPLATE from "./default_prompt_template.txt";
 import { MsgType } from "./enums";
 import { LLMBase } from "lib/llm/base";
+import type { WorkersAIModel } from "lib/llm/workers_ai";
 import { chatCompletionModelFromConfig, embeddingModelFromConfig } from "lib/llm/config";
-import type { Response } from "express";
 import { RateLimit } from "./rate_limit";
-import { GlobalChatRateLimitExceeded } from "../api/basics";
-
-const APP_VERSION = package_json.version;
-
-const DEFAULT_PROMPT_TEMPLATE = readFileSync(path.join(__dirname, "default_prompt_template.txt"), "utf-8");
+import type { RateLimitBumpResponse } from "./rate_limit";
+import { APIValidationError, GlobalChatRateLimitExceeded } from "../api/basics";
+import { runtime } from "../runtime";
+import { defaultConfig } from "./default_config";
 
 export interface Model {
   type: string;
@@ -27,10 +24,7 @@ export interface GenerationModel extends Model {
   reserve_token_count: number;
 }
 
-export type ChatRateLimitConfig = {
-  limit: number;
-  reset_period: number;
-}[];
+export type ChatRateLimitConfig = { limit: number; reset_period: number }[];
 
 export interface Config {
   embedding_model: Model;
@@ -42,166 +36,86 @@ export interface Config {
   global_rate_limit: ChatRateLimitConfig;
 }
 
-export interface ConfigChangeEvent {
-  new_id: string;
-  config: Config;
-}
-
 export class ConfigStore {
   static async defaultConfig(): Promise<Config> {
-    let conf: Config = {
-      embedding_model: {
-        type: "openai",
-        name: "text-embedding-3-small",
-        config: {}
-      },
-      generation_model: {
-        type: "openai-chat",
-        name: "gpt-3.5-turbo",
-        config: {
-          temperature: 0.5,
-          top_p: 1,
-          use_moderation: true,
-        },
-        history_limit: 50,
-        total_token_limit: 4096,
-        max_sample_tokens: 2048,
-        reserve_token_count: 255,
-      },
-      init_messages: [
-        [MsgType.Bot, "Hi, nice to meet you!"],
-      ],
-      prompt_template: DEFAULT_PROMPT_TEMPLATE,
-      allow_new_session: true,
-      allow_new_chat: true,
-      global_rate_limit: [
-        { limit: 30, reset_period: 60 },
-        { limit: 60, reset_period: 600 }
-      ]
-    };
-    return conf;
+    return defaultConfig(DEFAULT_PROMPT_TEMPLATE);
   }
 
-  private cached_config: Config = null;
-  private cached_conf_id: string = null;
-
-  private constructor() { }
+  private constructor(public config: Config, public config_id: string) {}
 
   static async createInstance(): Promise<ConfigStore> {
-    const store = new ConfigStore();
-    await withDBClient(async c => {
-      const { rows } = await c.query("select * from global_configuration order by id desc limit 1;");
-      if (rows.length == 0) {
-        const default_conf = await ConfigStore.defaultConfig();
-        let { rows }: { rows: any[] } = await c.query({
-          text: "insert into global_configuration (config, app_version) values ($1, $2) returning id",
-          values: [default_conf, APP_VERSION]
-        });
-        store.cached_config = default_conf;
-        store.cached_conf_id = rows[0].id;
-      } else {
-        const { config, app_version: stored_version, id } = rows[0];
-        if (typeof config != "object") {
-          throw new Error("Expected config to be a JSON object");
-        }
-        store.cached_config = config;
-        store.cached_conf_id = id;
-        if (stored_version != APP_VERSION) {
-          store.cached_config = {
-            ...(await ConfigStore.defaultConfig()),
-            ...store.cached_config
-          };
-          let { rows }: { rows: any[] } = await c.query({
-            text: "insert into global_configuration (config, app_version) values ($1, $2) returning id",
-            values: [store.cached_config, APP_VERSION]
-          });
-          store.cached_conf_id = rows[0].id;
-        }
+    return withDBClient(async db => {
+      const { rows } = await db.query("select id, config from global_configuration order by id desc limit 1");
+      if (!rows.length) {
+        throw new Error("Database configuration is missing. Run npm run db:migrate first.");
       }
+      return new ConfigStore(rows[0].config, rows[0].id);
     });
-    mq.queue.on(mq.MSG_APP_CONFIG_CHANGE, (data: ConfigChangeEvent) => {
-      store.cached_config = data.config;
-      store.cached_conf_id = data.new_id;
-    });
-    return store;
   }
 
-  get config(): Config {
-    return this.cached_config;
-  }
-
-  get config_id(): string {
-    return this.cached_conf_id;
-  }
-
-  async updateConfig(new_config: Config, if_match?: string): Promise<boolean> {
-    let new_id: string | null = null;
-    let updated = await withDBClient(async c => {
-      await c.query("begin transaction isolation level serializable;");
+  async updateConfig(config: Config, if_match?: string): Promise<boolean> {
+    return withDBClient(async db => {
+      await db.query("begin");
       try {
-        if (if_match !== undefined) {
-          let { rows }: { rows: any[] } = await c.query({
-            text: "select id from global_configuration order by id desc limit 1;",
-          });
-          if (rows.length == 0) {
-            throw new Error("No config in database when if_match was specified");
-          }
-          if (rows[0].id != if_match) {
-            return false;
+        await db.query("select pg_advisory_xact_lock(42001)");
+        const { rows } = await db.query("select id from global_configuration order by id desc limit 1");
+        if (if_match !== undefined && rows[0]?.id !== if_match) {
+          return false;
+        }
+        if (config.embedding_model.name !== this.config.embedding_model.name) {
+          const missing = await db.query(
+            `select count(*)::int as count from dialogue_phrasing p
+             left join dialogue_phrasing_embedding e on e.phrasing = p.id and e.model = $1
+             where e.phrasing is null or e.source_text is distinct from p.q_text`,
+            [config.embedding_model.name]
+          );
+          if (missing.rows[0].count) {
+            throw new APIValidationError("Re-embed all dialogue phrasings before switching embedding models.");
           }
         }
-        let { rows }: { rows: any[] } = await c.query({
-          text: "insert into global_configuration (config, app_version) values ($1, $2) returning id",
-          values: [new_config, APP_VERSION]
-        });
-        new_id = rows[0].id;
-        await c.query("commit;");
+        const result = await db.query(
+          "insert into global_configuration (config, app_version) values ($1, $2) returning id",
+          [config, package_json.version]
+        );
+        await db.query("commit");
+        this.config = config;
+        this.config_id = result.rows[0].id;
         return true;
       } finally {
-        await c.query("rollback;");
+        await db.query("rollback");
       }
     });
-    if (updated) {
-      this.cached_config = new_config;
-      this.cached_conf_id = new_id;
-      let evt: ConfigChangeEvent = {
-        config: new_config,
-        new_id: new_id!,
-      };
-      mq.queue.emit(mq.MSG_APP_CONFIG_CHANGE, evt);
-    }
-    return updated;
   }
 
   get generation_model(): LLMBase {
     return chatCompletionModelFromConfig(this.config.generation_model);
   }
 
-  get embedding_model(): LLMBase {
+  get embedding_model(): WorkersAIModel {
     return embeddingModelFromConfig(this.config.embedding_model);
   }
 
-  async enforceGlobalRateLimit(http_res: Response, db?: DBClient): Promise<void> {
+  async enforceGlobalRateLimit(db?: DBClient): Promise<RateLimitBumpResponse | undefined> {
     if (!db) {
-      return await withDBClient(db => this.enforceGlobalRateLimit(http_res, db));
+      return withDBClient(db => this.enforceGlobalRateLimit(db));
     }
-    for (let i = 0; i < this.config.global_rate_limit.length; i += 1) {
-      let key = `global_rate_limit[${i}]`;
-      let { limit, reset_period } = this.config.global_rate_limit[i];
-      let obj = new RateLimit(key, limit, reset_period);
-      let res = await obj.bump(db, http_res);
-      if (!res.success) {
-        throw new GlobalChatRateLimitExceeded(res);
+    let strictest: RateLimitBumpResponse | undefined;
+    for (let i = 0; i < this.config.global_rate_limit.length; i++) {
+      const { limit, reset_period } = this.config.global_rate_limit[i];
+      const result = await new RateLimit(`global_rate_limit[${i}]`, limit, reset_period).bump(db);
+      if (!result.success) {
+        throw new GlobalChatRateLimitExceeded(result);
       }
+      if (!strictest || result.remaining < strictest.remaining) strictest = result;
     }
+    return strictest;
   }
 }
 
-let cached_store_promise: Promise<ConfigStore> | null = null;
-
 export default function getConfigStore(): Promise<ConfigStore> {
-  if (!cached_store_promise) {
-    cached_store_promise = ConfigStore.createInstance();
+  const context = runtime();
+  if (!context.config) {
+    context.config = ConfigStore.createInstance();
   }
-  return cached_store_promise;
+  return context.config;
 }
